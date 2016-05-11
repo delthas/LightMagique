@@ -27,11 +27,11 @@ public class Server {
   private ByteBuffer startBuffer;
   private int sendCount;
 
-  public static void main(String... args) throws IOException {
+  public static void main(String... args) {
     new Server().start();
   }
 
-  private void start() throws IOException {
+  private void start() {
     for (int i = 0; i < Properties.PLAYER_COUNT; i++) {
       types[i] = ByteBuffer.allocate(1);
       buffers[i] = ByteBuffer.allocate(Properties.ENTITY_MESSAGE_LENGTH);
@@ -73,6 +73,8 @@ public class Server {
         buffer2.rewind();
       }
       loop();
+    } catch (IOException e) {
+      System.out.println("Extinction du serveur.");
     } finally {
       exit();
     }

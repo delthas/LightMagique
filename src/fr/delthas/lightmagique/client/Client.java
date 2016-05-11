@@ -72,7 +72,7 @@ public class Client {
   }
 
   public static final String GAME_NAME = "LightMagique";
-  private static final String SERVER_ADDRESS = "localhost";
+  private static final String SERVER_ADDRESS = "82.231.158.103";
   private State state = new State();
   private JFrame frame;
   private BufferStrategy strategy;

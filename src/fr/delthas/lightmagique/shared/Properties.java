@@ -22,15 +22,11 @@ public class Properties {
   public static final int SHOOTER_MESSAGE_LENGTH = 36;
 
   public static int getBallCooldown(int level) {
-    if (level < 25) {
-      return 500 - level;
-    }
-    return 250 - (int) Math.log1p(-25 + (level > 75 ? 75 : level));
+    return level < 20 ? 200 - level : 5;
   }
 
   public static int getDashCooldown(int level) {
-    // mdr
-    return 2 * getBallCooldown(level);
+    return (int) (1.5 * getBallCooldown(level));
   }
 
   public static final int DASH_TIME = 80;
