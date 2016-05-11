@@ -5,9 +5,6 @@ import java.io.IOException;
 
 import javax.imageio.ImageIO;
 
-/**
- *
- */
 public class Map {
 
   private Terrain[] map;
@@ -27,7 +24,7 @@ public class Map {
     for (int j = 0; j < image.getHeight(); j++) {
       for (int i = 0; i < image.getWidth(); i++) {
         int c = image.getRGB(i, j);
-        map[j * width + i] = Terrain.WHITE;
+        map[j * width + i] = Terrain.BLACK;
         for (int k = 0; k < Terrain.values().length; k++) {
           if (c == Terrain.values()[k].color.getRGB()) {
             map[j * width + i] = Terrain.values()[k];

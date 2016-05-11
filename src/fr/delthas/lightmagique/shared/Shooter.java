@@ -2,9 +2,6 @@ package fr.delthas.lightmagique.shared;
 
 import java.nio.ByteBuffer;
 
-/**
- *
- */
 public class Shooter extends Entity {
 
   private int health;

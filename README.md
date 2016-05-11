@@ -1,3 +1,3 @@
 # light-magique
 
-BouleMagique version une après-midi.
+BouleMagique version deux après-midi.
