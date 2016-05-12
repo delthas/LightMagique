@@ -2,45 +2,54 @@ package fr.delthas.lightmagique.shared;
 
 import java.nio.ByteBuffer;
 
-/**
- *
- */
 public class Entity {
 
   private boolean destroyed = true;
+  private boolean enemy;
+  private boolean moving = true;
   private double x, y;
   private double speed, angle;
-  private int drawable;
-  private boolean enemy;
+  private int health;
 
-  public void create(double x, double y, double speed, double angle, int drawable, boolean enemy) {
+  public void create(double x, double y, double speed, double angle, int health, boolean enemy) {
     destroyed = false;
     this.x = x;
     this.y = y;
     this.speed = speed;
     this.angle = angle;
-    this.drawable = drawable;
+    this.health = health;
     this.enemy = enemy;
   }
 
   void update(ByteBuffer entity) {
-    destroyed = entity.get() != 0;
-    x = entity.getDouble();
-    y = entity.getDouble();
+    byte bitfield = entity.get();
+    destroyed = (bitfield & 0b100) != 0;
+    enemy = (bitfield & 0b10) != 0;
+    moving = (bitfield & 0b1) != 0;
+    x = entity.getFloat();
+    y = entity.getFloat();
     speed = entity.getDouble();
     angle = entity.getDouble();
-    drawable = entity.getInt();
-    enemy = entity.get() != 0;
+    health = entity.getShort();
   }
 
   void serialize(ByteBuffer entity) {
-    entity.put(destroyed ? (byte) 1 : (byte) 0);
-    entity.putDouble(x);
-    entity.putDouble(y);
+    byte bitfield = 0;
+    if (destroyed) {
+      bitfield |= 0b100;
+    }
+    if (enemy) {
+      bitfield |= 0b10;
+    }
+    if (moving) {
+      bitfield |= 0b1;
+    }
+    entity.put(bitfield);
+    entity.putFloat((float) x);
+    entity.putFloat((float) y);
     entity.putDouble(speed);
     entity.putDouble(angle);
-    entity.putInt(drawable);
-    entity.put(enemy ? (byte) 1 : (byte) 0);
+    entity.putShort((short) health);
     entity.flip();
   }
 
@@ -88,16 +97,53 @@ public class Entity {
     this.angle = angle;
   }
 
-  public int getDrawable() {
-    return drawable;
+  public int getHealth() {
+    return health;
   }
 
-  public void setDrawable(int drawable) {
-    this.drawable = drawable;
+  public void increaseHealth(int amount) {
+    if (amount < 0) {
+      throw new IllegalArgumentException("Montant négatif : " + amount);
+    }
+    health += amount;
+  }
+
+  public void decreaseHealth(int amount) {
+    if (amount < 0) {
+      throw new IllegalArgumentException("Montant négatif : " + amount);
+    }
+    if (health <= 0) {
+      return;
+    }
+    if (health <= amount) {
+      health = 0;
+      zeroHealth();
+    } else {
+      health = health - amount;
+    }
+  }
+
+  protected void zeroHealth() {
+    destroy();
+  }
+
+  /**
+   * Outrepasse les déclenchements d'actions liées à la vie
+   */
+  public void setHealth(int amount) {
+    health = amount;
   }
 
   public boolean isEnemy() {
     return enemy;
+  }
+
+  public boolean isMoving() {
+    return moving;
+  }
+
+  public void setMoving(boolean moving) {
+    this.moving = moving;
   }
 
 }

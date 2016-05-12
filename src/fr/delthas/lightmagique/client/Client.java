@@ -2,29 +2,29 @@ package fr.delthas.lightmagique.client;
 
 import fr.delthas.lightmagique.shared.Entity;
 import fr.delthas.lightmagique.shared.Map;
+import fr.delthas.lightmagique.shared.Pair;
 import fr.delthas.lightmagique.shared.Properties;
 import fr.delthas.lightmagique.shared.Shooter;
 import fr.delthas.lightmagique.shared.State;
 
 import java.awt.Color;
+import java.awt.Font;
 import java.awt.Graphics2D;
 import java.awt.GraphicsDevice;
 import java.awt.GraphicsEnvironment;
 import java.awt.HeadlessException;
-import java.awt.Image;
 import java.awt.MouseInfo;
 import java.awt.Point;
-import java.awt.Transparency;
 import java.awt.event.KeyEvent;
 import java.awt.geom.AffineTransform;
 import java.awt.image.BufferStrategy;
-import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.GatheringByteChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.channels.WritableByteChannel;
+import java.util.Set;
 import java.util.function.BiConsumer;
 
 import javax.imageio.ImageIO;
@@ -87,24 +87,26 @@ public class Client {
   private ByteBuffer rStartBuffer;
   private ByteBuffer buffer;
   private ByteBuffer buffer2;
-  private Image mapImage;
   private static final double lookAroundFactor = 0.2;
 
   private int playerId = -1;
   private int sendCount;
+
+  private int levelUpPosition = 0;
+  private int xp = 0;
 
   public static void main(String[] args) throws IOException {
     new Client().start();
   }
 
   private void start() throws IOException {
-    rType = ByteBuffer.allocate(1);
-    rBuffer = ByteBuffer.allocate(Properties.ENTITY_MESSAGE_LENGTH);
-    rBuffer2 = ByteBuffer.allocate(Properties.SHOOTER_MESSAGE_LENGTH);
-    rChangeIdBuffer = ByteBuffer.allocate(8);
-    rStartBuffer = ByteBuffer.allocate(5);
-    buffer = ByteBuffer.allocate(1 + Properties.ENTITY_MESSAGE_LENGTH);
-    buffer2 = ByteBuffer.allocate(Properties.SHOOTER_MESSAGE_LENGTH);
+    rType = ByteBuffer.allocateDirect(1);
+    rBuffer = ByteBuffer.allocateDirect(Properties.ENTITY_MESSAGE_LENGTH);
+    rBuffer2 = ByteBuffer.allocateDirect(Properties.SHOOTER_MESSAGE_LENGTH);
+    rChangeIdBuffer = ByteBuffer.allocateDirect(4);
+    rStartBuffer = ByteBuffer.allocateDirect(3);
+    buffer = ByteBuffer.allocateDirect(1 + Properties.ENTITY_MESSAGE_LENGTH);
+    buffer2 = ByteBuffer.allocateDirect(Properties.SHOOTER_MESSAGE_LENGTH);
     initFrame();
 
     try {
@@ -119,7 +121,8 @@ public class Client {
       channel.read(rStartBuffer);
       rStartBuffer.flip();
       rStartBuffer.get();
-      playerId = rStartBuffer.getInt();
+      playerId = rStartBuffer.getShort();
+      state.getPlayer(playerId).createPlayer(0, 0, 0); // init player to sane values
       channel.configureBlocking(false);
       loop();
     } finally {
@@ -187,9 +190,12 @@ public class Client {
           rChangeIdBuffer.clear();
           channel.read(rChangeIdBuffer);
           rChangeIdBuffer.flip();
-          int oldId = rChangeIdBuffer.getInt();
-          int newId = rChangeIdBuffer.getInt();
+          int oldId = rChangeIdBuffer.getShort();
+          int newId = rChangeIdBuffer.getShort();
           state.swapEntities(oldId, newId);
+          break;
+        case 4:
+          xp += Properties.XP_PER_HIT;
           break;
         default:
           throw new IOException("Unknown message: type " + type);
@@ -203,9 +209,6 @@ public class Client {
    *
    */
   private boolean input() throws IOException {
-    Point mousePosition = MouseInfo.getPointerInfo().getLocation();
-    mousePosition.translate(-screenWidth / 2, -screenHeight / 2);
-
     if (inputManager.isKeyDown(KeyEvent.VK_ESCAPE)) {
       closeRequested = true;
       return true;
@@ -213,73 +216,79 @@ public class Client {
 
     AxisState x;
     if (inputManager.isKeyDown(KeyEvent.VK_Q)) {
-      if (!inputManager.isKeyDown(KeyEvent.VK_D)) {
-        x = AxisState.MINUS;
-      } else {
-        x = AxisState.ZERO;
-      }
+      x = inputManager.isKeyDown(KeyEvent.VK_D) ? AxisState.ZERO : AxisState.MINUS;
     } else {
-      if (!inputManager.isKeyDown(KeyEvent.VK_D)) {
-        x = AxisState.ZERO;
-      } else {
-        x = AxisState.PLUS;
-      }
+      x = inputManager.isKeyDown(KeyEvent.VK_D) ? AxisState.PLUS : AxisState.ZERO;
     }
-
     AxisState y;
     if (inputManager.isKeyDown(KeyEvent.VK_Z)) {
-      if (!inputManager.isKeyDown(KeyEvent.VK_S)) {
-        y = AxisState.MINUS;
-      } else {
-        y = AxisState.ZERO;
-      }
+      y = inputManager.isKeyDown(KeyEvent.VK_S) ? AxisState.ZERO : AxisState.MINUS;
     } else {
-      if (!inputManager.isKeyDown(KeyEvent.VK_S)) {
-        y = AxisState.ZERO;
-      } else {
-        y = AxisState.PLUS;
-      }
+      y = inputManager.isKeyDown(KeyEvent.VK_S) ? AxisState.PLUS : AxisState.ZERO;
     }
-
-    AxisState ball;
-    if (inputManager.isKeyDown(KeyEvent.VK_SPACE)) {
-      ball = AxisState.PLUS;
-    } else {
-      ball = AxisState.ZERO;
-    }
-
-    AxisState dash;
-    if (inputManager.isMouseDown(1)) {
-      dash = AxisState.PLUS;
-    } else {
-      dash = AxisState.ZERO;
-    }
+    AxisState ball = inputManager.isMouseDown(0) ? AxisState.PLUS : AxisState.ZERO;
+    AxisState chargedBall = inputManager.isMouseDown(2) ? AxisState.PLUS : AxisState.ZERO;
+    AxisState dash = inputManager.isKeyDown(KeyEvent.VK_SPACE) ? AxisState.PLUS : AxisState.ZERO;
 
     Shooter player = state.getPlayer(playerId);
     if (x != AxisState.ZERO || y != AxisState.ZERO) {
+      player.setMoving(true);
       player.setAngle(AxisState.getAngle(x, y));
-      if (!player.isDashing()) {
-        player.setSpeed(Properties.PLAYER_SPEED);
-      }
     } else {
-      if (!player.isDashing()) {
-        player.setSpeed(0);
+      player.setMoving(false);
+    }
+    if (chargedBall == AxisState.PLUS) {
+      player.charge();
+    } else {
+      Pair<Double, Integer> ballSpecs = player.stopCharge();
+      if (ballSpecs != null) {
+        int freeId = state.getFreeEntityId(true);
+        Point mousePosition = MouseInfo.getPointerInfo().getLocation();
+        double ballAngle = Math.atan2(mousePosition.y - screenWidth / 2, mousePosition.x - screenHeight / 2);
+        state.getEntity(freeId).create(player.getX(), player.getY(), ballSpecs.getFirst(), ballAngle, ballSpecs.getSecond(), false);
+        buffer.clear();
+        buffer.put((byte) 2);
+        state.serialize(freeId, buffer);
+        write(channel, buffer);
       }
     }
-    if (!player.isDestroyed()) {
-      if (ball == AxisState.PLUS) {
-        if (player.ball()) {
-          int freeId = state.getFreeEntityId(true);
-          double ballAngle = Math.atan2(mousePosition.y, mousePosition.x);
-          state.getEntity(freeId).create(player.getX(), player.getY(), Properties.BALL_SPEED, ballAngle, 4, false);
-          buffer.clear();
-          buffer.put((byte) 2);
-          state.serialize(freeId, buffer);
-          write(channel, buffer);
-        }
+    if (ball == AxisState.PLUS) {
+      Pair<Double, Integer> ballSpecs = player.ball();
+      if (ballSpecs != null) {
+        int freeId = state.getFreeEntityId(true);
+        Point mousePosition = MouseInfo.getPointerInfo().getLocation();
+        double ballAngle = Math.atan2(mousePosition.y - screenHeight / 2, mousePosition.x - screenWidth / 2);
+        state.getEntity(freeId).create(player.getX(), player.getY(), ballSpecs.getFirst(), ballAngle, ballSpecs.getSecond(), false);
+        buffer.clear();
+        buffer.put((byte) 2);
+        state.serialize(freeId, buffer);
+        write(channel, buffer);
       }
-      if (dash == AxisState.PLUS) {
-        player.dash();
+    }
+    if (dash == AxisState.PLUS) {
+      player.dash();
+    }
+    Set<Integer> keyPressed = inputManager.flush();
+    if (keyPressed.contains(KeyEvent.VK_DOWN)) {
+      if (levelUpPosition == Shooter.getLevelNames().length - 1) {
+        levelUpPosition = 0;
+      } else {
+        levelUpPosition++;
+      }
+    }
+    if (keyPressed.contains(KeyEvent.VK_UP)) {
+      if (levelUpPosition == 0) {
+        levelUpPosition = Shooter.getLevelNames().length - 1;
+      } else {
+        levelUpPosition--;
+      }
+    }
+    if (keyPressed.contains(KeyEvent.VK_ENTER)) {
+      int currentLevel = player.getLevels()[levelUpPosition];
+      int neededXp = Properties.getNeededXp(currentLevel);
+      if (neededXp <= xp) {
+        xp -= neededXp;
+        player.increaseLevel(levelUpPosition);
       }
     }
     return false;
@@ -300,10 +309,9 @@ public class Client {
   private void exit() {
     frame.setVisible(false);
     frame.dispose();
-    System.exit(0);
   }
 
-  private void render(float alpha) {
+  private void render(@SuppressWarnings("unused") float alpha) {
     Graphics2D g = (Graphics2D) strategy.getDrawGraphics();
     g.setBackground(Color.BLACK);
     g.setColor(Color.WHITE);
@@ -317,7 +325,7 @@ public class Client {
     int maxX = minX + screenWidth - 1;
     int maxY = minY + screenHeight - 1;
 
-    g.drawImage(mapImage, 0, 0, screenWidth - 1, screenHeight - 1, minX, minY, maxX, maxY, null);
+    g.drawImage(state.getMap().getMapImage(), 0, 0, screenWidth - 1, screenHeight - 1, minX, minY, maxX, maxY, null);
 
     BiConsumer<Graphics2D, Entity> draw = (graphics, entity) -> {
       if (entity.isDestroyed()) {
@@ -329,32 +337,27 @@ public class Client {
       AffineTransform save = graphics.getTransform();
       graphics.translate(entity.getX() - minX, entity.getY() - minY);
       graphics.rotate(entity.getAngle());
-      graphics.scale(2.8, 2.8);
-      switch (entity.getDrawable()) {
-        case 0:
-          graphics.setColor(Color.PINK);
-          graphics.fillPolygon(new int[] {-5, -5, 10}, new int[] {5, -5, 0}, 3);
-          break;
-        case 1:
-          graphics.setColor(Color.RED);
-          graphics.fillPolygon(new int[] {-5, -5, 10}, new int[] {5, -5, 0}, 3);
-          break;
-        case 2:
-          graphics.setColor(Color.GREEN);
-          graphics.fillPolygon(new int[] {-5, -5, 10}, new int[] {5, -5, 0}, 3);
-          break;
-        case 3:
-          graphics.setColor(Color.YELLOW);
-          graphics.fillPolygon(new int[] {-5, -5, 10}, new int[] {5, -5, 0}, 3);
-          break;
-        case 4:
-          graphics.setColor(Color.BLUE);
-          graphics.fillOval(-5, -5, 10, 10);
-          break;
-        case 5:
-          graphics.setColor(Color.RED);
-          graphics.fillOval(-5, -5, 10, 10);
-          break;
+      if (entity instanceof Shooter) {
+        float healthPercent = ((Shooter) entity).getHealthPercent();
+        if (entity.isEnemy()) { // enemy
+          graphics.setColor(new Color(0.5f - 0.5f * healthPercent, 0.5f + 0.5f * healthPercent, 0.5f - 0.5f * healthPercent));
+          graphics.fillPolygon(new int[] {-10, -10, 20}, new int[] {10, -10, 0}, 3);
+        } else { // player
+          if (((Shooter) entity).isFrozen()) {
+            graphics.setColor(new Color(0, 0, 0.5f + 0.5f * healthPercent));
+          } else {
+            graphics.setColor(new Color(0.5f + 0.5f * healthPercent, 0.5f - 0.5f * healthPercent, 0.5f - 0.5f * healthPercent));
+          }
+          graphics.fillPolygon(new int[] {-10, -10, 20}, new int[] {10, -10, 0}, 3);
+        }
+      } else {
+        float damagePercent = entity.getHealth() / (float) Properties.getChargedBallMaxCharge(Properties.MAX_LEVEL);
+        graphics.setColor(Color.getHSBColor(damagePercent, 1, 1));
+        if (entity.isEnemy()) { // enemy ball
+          graphics.fillOval(-6, -6, 13, 13);
+        } else { // player ball
+          graphics.fillOval(-5, -5, 11, 11);
+        }
       }
       graphics.setTransform(save);
     };
@@ -367,6 +370,23 @@ public class Client {
     }
     for (int i = 0; i < Properties.PLAYER_COUNT; i++) {
       draw.accept(g, state.getPlayer(i));
+    }
+
+    if (inputManager.isKeyDown(KeyEvent.VK_SHIFT)) {
+      String[] names = Shooter.getLevelNames();
+      int[] levels = state.getPlayer(playerId).getLevels();
+      int length = levels.length;
+      g.setFont(Font.decode("Comic Sans MS"));
+      g.setColor(Color.YELLOW);
+      g.fillRect(0, 0, screenWidth, 50 * (length + 2));
+      g.setColor(Color.BLACK);
+      g.drawString("Xp actuelle : " + xp, 20, 50);
+      for (int i = 0; i < length; i++) {
+        g.drawString(names[i], 20, 100 + 50 * i);
+        g.drawString("Niveau actuel : " + levels[i] + " ; Xp nécessaire pour upgrade : " + Properties.getNeededXp(levels[i]), 20, 115 + 50 * i);
+      }
+      g.setColor(Color.RED);
+      g.fillRect(5, 100 + 50 * levelUpPosition - 5, 11, 11);
     }
 
     g.dispose();
@@ -388,15 +408,7 @@ public class Client {
     screenWidth = frame.getWidth();
     screenHeight = frame.getHeight();
     Map map = state.getMap();
-    BufferedImage image = device.getDefaultConfiguration().createCompatibleImage(map.getWidth(), map.getHeight(), Transparency.OPAQUE);
-    int[] pixels = new int[map.getWidth() * map.getHeight()];
-    for (int y = 0; y < map.getHeight(); y++) {
-      for (int x = 0; x < map.getWidth(); x++) {
-        pixels[y * map.getWidth() + x] = map.getTerrain(x, y).color.getRGB();
-      }
-    }
-    image.getRaster().setDataElements(0, 0, map.getWidth(), map.getHeight(), pixels);
-    mapImage = image;
+    map.makeImageCompatibleWith(device.getDefaultConfiguration());
   }
 
   private static void write(WritableByteChannel channel, ByteBuffer buf) throws IOException {

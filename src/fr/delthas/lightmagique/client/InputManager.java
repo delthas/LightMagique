@@ -4,15 +4,31 @@ import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 
 public class InputManager implements KeyListener, MouseListener {
 
-  private HashMap<Integer, Boolean> keysState = new HashMap<>();
+  private Map<Integer, Boolean> keysState = new HashMap<>();
   private boolean[] mouseDown = new boolean[3];
+
+  private Set<Integer> newKeys = new HashSet<>(2);
+
+  public Set<Integer> flush() {
+    if (newKeys.isEmpty()) {
+      return Collections.emptySet();
+    }
+    Set<Integer> lastKeys = Collections.unmodifiableSet(newKeys);
+    newKeys = new HashSet<>(2);
+    return lastKeys;
+  }
 
   @Override
   public void keyPressed(KeyEvent e) {
+    newKeys.add(e.getKeyCode());
     keysState.put(e.getKeyCode(), true);
   }
 
@@ -32,6 +48,7 @@ public class InputManager implements KeyListener, MouseListener {
   public void mouseClicked(MouseEvent e) {}
 
   // TODO fix pour les oneshot genre dash et spell, flag d'utilisation
+  // pas besoin dans l'immédiat grâce aux cooldowns
 
   @Override
   public void mousePressed(MouseEvent e) {
