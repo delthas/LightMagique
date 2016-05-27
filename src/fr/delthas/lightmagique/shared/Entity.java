@@ -7,16 +7,18 @@ public class Entity {
   private boolean destroyed = true;
   private boolean enemy;
   private boolean moving = true;
+  private int hitbox; // in hundred units
   private double x, y;
   private double speed, angle;
   private int health;
 
-  public void create(double x, double y, double speed, double angle, int health, boolean enemy) {
+  public void create(double x, double y, double speed, double angle, int hitbox, int health, boolean enemy) {
     destroyed = false;
     this.x = x;
     this.y = y;
     this.speed = speed;
     this.angle = angle;
+    this.hitbox = hitbox;
     this.health = health;
     this.enemy = enemy;
   }
@@ -28,6 +30,7 @@ public class Entity {
     moving = (bitfield & 0b1) != 0;
     x = entity.getFloat();
     y = entity.getFloat();
+    hitbox = entity.getShort();
     speed = entity.getDouble();
     angle = entity.getDouble();
     health = entity.getShort();
@@ -47,6 +50,7 @@ public class Entity {
     entity.put(bitfield);
     entity.putFloat((float) x);
     entity.putFloat((float) y);
+    entity.putShort((short) hitbox);
     entity.putDouble(speed);
     entity.putDouble(angle);
     entity.putShort((short) health);
@@ -97,6 +101,14 @@ public class Entity {
     this.angle = angle;
   }
 
+  public int getHitbox() {
+    return hitbox;
+  }
+
+  public void setHitbox(int hitbox) {
+    this.hitbox = hitbox;
+  }
+
   public int getHealth() {
     return health;
   }
@@ -111,9 +123,6 @@ public class Entity {
   public void decreaseHealth(int amount) {
     if (amount < 0) {
       throw new IllegalArgumentException("Montant négatif : " + amount);
-    }
-    if (health <= 0) {
-      return;
     }
     if (health <= amount) {
       health = 0;

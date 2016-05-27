@@ -1,6 +1,7 @@
 package fr.delthas.lightmagique.shared;
 
 import java.nio.ByteBuffer;
+import java.util.Optional;
 import java.util.function.Consumer;
 
 public class State {
@@ -84,13 +85,7 @@ public class State {
       }
       shooter.logic();
       if (shooter.isMoving()) {
-        double nx = shooter.getX() + shooter.getSpeed() * Math.cos(shooter.getAngle());
-        double ny = shooter.getY() + shooter.getSpeed() * Math.sin(shooter.getAngle());
-        Terrain terrain = map.getTerrain((int) nx, (int) ny);
-        if (terrain.playerThrough) {
-          shooter.setX(nx);
-          shooter.setY(ny);
-        }
+        tryMoveEntity(shooter, false);
       }
     }
     for (Shooter shooter : enemies) {
@@ -99,13 +94,7 @@ public class State {
       }
       shooter.logic();
       if (shooter.isMoving()) {
-        double nx = shooter.getX() + shooter.getSpeed() * Math.cos(shooter.getAngle());
-        double ny = shooter.getY() + shooter.getSpeed() * Math.sin(shooter.getAngle());
-        Terrain terrain = map.getTerrain((int) nx, (int) ny);
-        if (terrain.playerThrough) {
-          shooter.setX(nx);
-          shooter.setY(ny);
-        }
+        tryMoveEntity(shooter, false);
       }
     }
     for (int i = 0; i < Properties.ENTITIES_MAX; i++) {
@@ -114,25 +103,40 @@ public class State {
         continue;
       }
       if (entity.isMoving()) {
-        double nx = entity.getX() + entity.getSpeed() * Math.cos(entity.getAngle());
-        double ny = entity.getY() + entity.getSpeed() * Math.sin(entity.getAngle());
-        Terrain terrain = map.getTerrain((int) nx, (int) ny);
-        if (terrain.ballThrough) {
-          entity.setX(nx);
-          entity.setY(ny);
-        } else {
-          entity.destroy();
-          if (destroyEntityListener != null) {
-            destroyEntityListener.accept(i);
+        if (entity.getHitbox() <= Properties.BALL_HITBOX) {
+          // do not attempt to move it cleverly
+          Pair<Double, Double> pair = tryMoveEntity(entity.getX(), entity.getY(), entity.getSpeed(), entity.getAngle(), false);
+          if (pair != null) {
+            entity.setX(pair.getFirst());
+            entity.setY(pair.getSecond());
+          } else {
+            entity.destroy();
+            if (destroyEntityListener != null) {
+              destroyEntityListener.accept(i);
+            }
+            continue;
           }
-          continue;
+        } else {
+          // // attempt to move it cleverly
+          // Optional<Boolean> result = tryMoveEntity(entity, entity.isEnemy());
+          // if (result.isPresent() && result.get()) {
+          // // had to change its direction, punish it by removing some hitbox
+          // entity.setHitbox(entity.getHitbox() - 1);
+          // }
+          Pair<Double, Double> pair = tryMoveEntity(entity.getX(), entity.getY(), entity.getSpeed(), entity.getAngle(), false);
+          if (pair != null) {
+            entity.setX(pair.getFirst());
+            entity.setY(pair.getSecond());
+          } else {
+            entity.setHitbox(entity.getHitbox() - 1);
+          }
         }
       }
       for (Shooter shooter : entity.isEnemy() ? players : enemies) {
         if (shooter.isDestroyed()) {
           continue;
         }
-        if (connects(entity.getX(), entity.getY(), shooter.getX(), shooter.getY(), 10)) {
+        if (connects(entity.getX(), entity.getY(), shooter.getX(), shooter.getY(), (entity.getHitbox() + shooter.getHitbox()) / 100.0)) {
           int shooterHealth = shooter.getHealth();
           int entityHealth = entity.getHealth();
           int decreaseHealth;
@@ -214,5 +218,55 @@ public class State {
 
   public void setPlayerKilledEnemyListener(Consumer<Void> playerKilledEnemyListener) {
     this.playerKilledEnemyListener = playerKilledEnemyListener;
+  }
+
+  private Pair<Double, Double> tryMoveEntity(double x, double y, double speed, double angle, boolean shooter) {
+    double nx = x + speed * Math.cos(angle);
+    double ny = y + speed * Math.sin(angle);
+    Terrain terrain = map.getTerrain((int) nx, (int) ny);
+    if (shooter && terrain.playerThrough || !shooter && terrain.ballThrough) {
+      return new Pair<>(nx, ny);
+    }
+    return null;
+  }
+
+  private Optional<Boolean> tryMoveEntity(Entity entity, boolean disableChecks) {
+    if (disableChecks) {
+      double nx = entity.getX() + entity.getSpeed() * Math.cos(entity.getAngle());
+      double ny = entity.getY() + entity.getSpeed() * Math.sin(entity.getAngle());
+      Terrain terrain = map.getTerrain((int) nx, (int) ny);
+      entity.setX(nx);
+      entity.setY(ny);
+      if (terrain.ballThrough) {
+        return Optional.of(Boolean.FALSE);
+      } else {
+        return Optional.of(Boolean.TRUE);
+      }
+    }
+    Pair<Double, Double> pair = tryMoveEntity(entity.getX(), entity.getY(), entity.getSpeed(), entity.getAngle(), entity instanceof Shooter);
+    if (pair != null) {
+      entity.setX(pair.getFirst());
+      entity.setY(pair.getSecond());
+      return Optional.of(Boolean.FALSE);
+    } else {
+      // try to make it move anyway by slightly changing its angle and speed
+      for (double speed = entity.getSpeed(); speed >= 0; speed -= entity.getSpeed() / 5) {
+        for (double angle = 0; angle < (1.5 - speed / entity.getSpeed()) * Math.PI / 1.2; angle += 0.1) {
+          pair = tryMoveEntity(entity.getX(), entity.getY(), speed, entity.getAngle() + angle, true);
+          if (pair != null) {
+            entity.setX(pair.getFirst());
+            entity.setY(pair.getSecond());
+            return Optional.of(Boolean.TRUE);
+          }
+          pair = tryMoveEntity(entity.getX(), entity.getY(), speed, entity.getAngle() - angle, true);
+          if (pair != null) {
+            entity.setX(pair.getFirst());
+            entity.setY(pair.getSecond());
+            return Optional.of(Boolean.TRUE);
+          }
+        }
+      }
+    }
+    return Optional.empty();
   }
 }

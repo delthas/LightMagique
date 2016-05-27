@@ -1,10 +1,6 @@
 package fr.delthas.lightmagique.shared;
 
 import java.awt.Color;
-import java.awt.Graphics2D;
-import java.awt.GraphicsConfiguration;
-import java.awt.Image;
-import java.awt.Transparency;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 
@@ -35,9 +31,14 @@ public class Map {
         } else if (color.equals(Color.RED)) {
           type = Terrain.BALL;
         } else {
-          type = Terrain.PASS;
+          if (new Color(mapImage.getRGB(i, j), true).getAlpha() == 0) {
+            type = Terrain.PASS_NO_SPAWN;
+          } else {
+            type = Terrain.PASS;
+          }
         }
-        map[j * width + i] = type;
+        mapImage.setRGB(i, j, color.getRGB());
+        map[(height - 1 - j) * width + i] = type;
       }
     }
 
@@ -58,16 +59,7 @@ public class Map {
     return height;
   }
 
-  public void makeImageCompatibleWith(GraphicsConfiguration targetConfiguration) {
-    BufferedImage newImage = targetConfiguration.createCompatibleImage(width, height, Transparency.OPAQUE);
-    Graphics2D g = (Graphics2D) newImage.getGraphics();
-    g.drawImage(mapImage, 0, 0, null);
-    g.dispose();
-    mapImage.flush();
-    mapImage = newImage;
-  }
-
-  public Image getMapImage() {
+  public BufferedImage getMapImage() {
     return mapImage;
   }
 

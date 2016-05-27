@@ -1,18 +1,23 @@
 package fr.delthas.lightmagique.server;
 
-import fr.delthas.lightmagique.shared.Pair;
-import fr.delthas.lightmagique.shared.Properties;
-import fr.delthas.lightmagique.shared.Shooter;
-import fr.delthas.lightmagique.shared.State;
-
+import java.awt.Toolkit;
+import java.awt.datatransfer.StringSelection;
 import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.net.InetSocketAddress;
+import java.net.StandardSocketOptions;
 import java.nio.ByteBuffer;
 import java.nio.channels.GatheringByteChannel;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.channels.WritableByteChannel;
 import java.util.Random;
+
+import fr.delthas.lightmagique.shared.Properties;
+import fr.delthas.lightmagique.shared.Shooter;
+import fr.delthas.lightmagique.shared.State;
+import fr.delthas.lightmagique.shared.Triplet;
 
 public class Server {
 
@@ -27,17 +32,33 @@ public class Server {
   private ByteBuffer buffer2;
   private ByteBuffer changeIdBuffer;
   private ByteBuffer startBuffer;
-  private ByteBuffer xpBuffer;
+  private ByteBuffer oneByteBuffer;
+  private ByteBuffer waveStartBuffer;
   private int sendCount;
 
   private int wave = 0;
   private int ticksUntilNextWave = 0; // -1 = waiting for no enemy left
 
+  private int clientThatSentExit = -1;
+
   public static void main(String... args) {
-    new Server().start();
+    try {
+      new Server().start();
+    } catch (Exception e) {
+      System.err.println("An exception has occured. This stack trace has been copied to your clipboard.");
+      e.printStackTrace(System.err);
+      StringWriter stringWriter = new StringWriter();
+      @SuppressWarnings("resource")
+      PrintWriter printWriter = new PrintWriter(stringWriter);
+      e.printStackTrace(printWriter);
+      printWriter.flush();
+      printWriter.close();
+      StringSelection stringSelection = new StringSelection(stringWriter.toString());
+      Toolkit.getDefaultToolkit().getSystemClipboard().setContents(stringSelection, null);
+    }
   }
 
-  private void start() {
+  private void start() throws IOException {
     for (int i = 0; i < Properties.PLAYER_COUNT; i++) {
       types[i] = ByteBuffer.allocateDirect(1);
       buffers[i] = ByteBuffer.allocateDirect(Properties.ENTITY_MESSAGE_LENGTH);
@@ -46,20 +67,21 @@ public class Server {
     buffer = ByteBuffer.allocateDirect(1 + Properties.ENTITY_MESSAGE_LENGTH);
     buffer2 = ByteBuffer.allocateDirect(Properties.SHOOTER_MESSAGE_LENGTH);
     changeIdBuffer = ByteBuffer.allocateDirect(5);
-    startBuffer = ByteBuffer.allocateDirect(3);
-    xpBuffer = ByteBuffer.allocateDirect(1);
-    xpBuffer.put((byte) 4).flip();
+    startBuffer = ByteBuffer.allocateDirect(2);
+    oneByteBuffer = ByteBuffer.allocateDirect(1);
+    waveStartBuffer = ByteBuffer.allocateDirect(5);
 
     try (ServerSocketChannel serverSocketChannel = ServerSocketChannel.open()) {
       serverSocketChannel.configureBlocking(true);
       serverSocketChannel.bind(new InetSocketAddress(Properties.SERVER_PORT));
       for (int i = 0; i < Properties.PLAYER_COUNT; i++) {
         channels[i] = serverSocketChannel.accept();
+        channels[i].setOption(StandardSocketOptions.TCP_NODELAY, Boolean.TRUE);
         channels[i].configureBlocking(true);
       }
       for (int i = 0; i < Properties.PLAYER_COUNT; i++) {
         startBuffer.clear();
-        startBuffer.put((byte) 4).putShort((short) i).flip();
+        startBuffer.putShort((short) i).flip();
         write(channels[i], startBuffer);
         channels[i].configureBlocking(false);
       }
@@ -82,16 +104,39 @@ public class Server {
       state.setDestroyEnemyListener(this::sendEnemy);
       state.setDestroyEntityListener(this::sendEntity);
       state.setPlayerKilledEnemyListener(_void -> {
+        oneByteBuffer.clear();
+        oneByteBuffer.put((byte) 4).flip();
         for (int i = 0; i < Properties.PLAYER_COUNT; i++) {
-          xpBuffer.rewind();
-          write(channels[i], xpBuffer);
+          write(channels[i], oneByteBuffer);
+          oneByteBuffer.rewind();
         }
       });
       loop();
-    } catch (IOException e) {
-      System.out.println("Extinction du serveur.");
-    } finally {
-      exit();
+      oneByteBuffer.clear();
+      oneByteBuffer.put((byte) 7).flip();
+      for (int i = 0; i < Properties.PLAYER_COUNT; i++) {
+        if (i == clientThatSentExit) {
+          continue;
+        }
+        write(channels[i], oneByteBuffer);
+        oneByteBuffer.rewind();
+      }
+
+      // need to do a clumsy poll here b/c the channel is non blocking
+      // wait for server to exit (5 seconds at most)
+      outer: for (int i = 0; i < 50; i++) {
+        try {
+          Thread.sleep(100);
+        } catch (InterruptedException e) {
+          break;
+        }
+        for (int j = 0; j < Properties.PLAYER_COUNT; j++) {
+          if (channels[j].isConnected()) {
+            continue outer;
+          }
+        }
+        break;
+      }
     }
   }
 
@@ -105,7 +150,9 @@ public class Server {
       lastFrame = newTime;
       accumulator += deltaTime;
       while (accumulator >= Properties.TICK_TIME * 1000000) {
-        receiveState();
+        if (receiveState()) {
+          return;
+        }
         logic();
         if (++sendCount % Properties.STATE_SEND_INTERVAL == 0) {
           sendState();
@@ -124,7 +171,7 @@ public class Server {
     }
   }
 
-  private void receiveState() throws IOException {
+  private boolean receiveState() throws IOException {
     outer: for (int i = 0; i < Properties.PLAYER_COUNT; i++) {
       while (true) {
         if (types[i].position() == 0) { // on sait pas le type du message suivant
@@ -165,12 +212,16 @@ public class Server {
             state.update(buffers[i]);
             sendEntity(id);
             break;
+          case 7:
+            clientThatSentExit = i;
+            return true;
           default:
             throw new IOException("Unknown message: type " + type);
         }
         types[i].clear();
       }
     }
+    return false;
   }
 
   private void logic() {
@@ -191,16 +242,28 @@ public class Server {
         }
         double angle = Math.atan2(player.getY() - enemy.getY(), player.getX() - enemy.getX());
         enemy.setAngle(angle);
+        enemy.dash();
         if (player.isFrozen() && min < 50 * 50) {
           enemy.setMoving(false);
         } else {
           enemy.setMoving(true);
         }
-        Pair<Double, Integer> ball = enemy.ball();
+        Triplet<Double, Integer, Integer> ball = enemy.ball();
         if (ball != null) {
           int id = state.getFreeEntityId(false);
-          state.getEntity(id).create(enemy.getX(), enemy.getY(), ball.getFirst(), angle, ball.getSecond(), true);
+          state.getEntity(id).create(enemy.getX(), enemy.getY(), ball.getFirst(), angle, ball.getThird(), ball.getSecond(), true);
           sendEntity(id);
+        }
+        if (enemy.getChargedBallChargePercent() == 1.0f) {
+          ball = enemy.stopCharge();
+          if (ball != null) {
+            int id = state.getFreeEntityId(false);
+            state.getEntity(id).create(enemy.getX(), enemy.getY(), ball.getFirst(), angle, ball.getThird(), ball.getSecond(), true);
+            sendEntity(id);
+          }
+        }
+        if (!enemy.isCharging() && enemy.canCharge() && random.nextInt(1000) == 0) {
+          enemy.charge();
         }
       }
     }
@@ -208,16 +271,28 @@ public class Server {
     if (ticksUntilNextWave == 0) {
       ticksUntilNextWave = -1;
       wave++;
+      waveStartBuffer.clear();
+      waveStartBuffer.put((byte) 5).putInt(wave).flip();
+      for (int i = 0; i < Properties.PLAYER_COUNT; i++) {
+        write(channels[i], waveStartBuffer);
+        waveStartBuffer.rewind();
+      }
       for (int i = 0; i < wave; i++) {
         int x;
         int y;
         do {
           x = random.nextInt(state.getMap().getWidth());
           y = random.nextInt(state.getMap().getHeight());
-        } while (!state.getMap().getTerrain(x, y).playerThrough);
-        Shooter enemy = state.getEnemy(state.getFreeEnemyId());
-        double angle = random.nextDouble() * Math.PI * 2;
-        enemy.createEnemy(x, y, angle, 1 + wave / 3);
+        } while (!state.getMap().getTerrain(x, y).canSpawn);
+        for (int j = 0; j < random.nextInt((int) (1.5 * wave)); j++) {
+          Shooter enemy = state.getEnemy(state.getFreeEnemyId());
+          double angle = random.nextDouble() * Math.PI * 2;
+          int nx = x + random.nextInt(101) - 50;
+          int ny = y + random.nextInt(101) - 50;
+          if (state.getMap().getTerrain(nx, ny).canSpawn) {
+            enemy.createEnemy(nx, ny, angle, 2 * wave, true);
+          }
+        }
       }
     } else if (ticksUntilNextWave > 0) {
       ticksUntilNextWave--;
@@ -230,7 +305,13 @@ public class Server {
         }
       }
       if (allDestroyed) {
-        ticksUntilNextWave = 1500;
+        oneByteBuffer.clear();
+        oneByteBuffer.put((byte) 6).flip();
+        for (int i = 0; i < Properties.PLAYER_COUNT; i++) {
+          write(channels[i], oneByteBuffer);
+          oneByteBuffer.rewind();
+        }
+        ticksUntilNextWave = 1000;
       }
     }
     state.logic();
@@ -279,10 +360,6 @@ public class Server {
       buffer.rewind();
       buffer2.rewind();
     }
-  }
-
-  private void exit() {
-    // nothing to do
   }
 
   private static void write(WritableByteChannel channel, ByteBuffer buf) {
