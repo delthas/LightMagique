@@ -1,36 +1,135 @@
 package fr.delthas.lightmagique.client;
 
-import static org.lwjgl.glfw.GLFW.*;
-import static org.lwjgl.opengl.GL11.*;
-import static org.lwjgl.opengl.GL12.*;
-import static org.lwjgl.opengl.GL13.*;
-import static org.lwjgl.opengl.GL14.*;
-import static org.lwjgl.opengl.GL15.*;
-import static org.lwjgl.opengl.GL20.*;
-import static org.lwjgl.opengl.GL21.*;
-import static org.lwjgl.opengl.GL30.*;
-import static org.lwjgl.opengl.GL31.*;
-import static org.lwjgl.opengl.GL32.*;
-import static org.lwjgl.opengl.GL33.*;
-import static org.lwjgl.opengl.GL40.*;
-import static org.lwjgl.opengl.GL41.*;
-import static org.lwjgl.opengl.GL42.*;
-import static org.lwjgl.opengl.GL43.*;
-import static org.lwjgl.opengl.GL44.*;
-import static org.lwjgl.opengl.GL45.*;
-import static org.lwjgl.system.MemoryUtil.*;
+import static org.lwjgl.glfw.GLFW.GLFW_BLUE_BITS;
+import static org.lwjgl.glfw.GLFW.GLFW_CONTEXT_VERSION_MAJOR;
+import static org.lwjgl.glfw.GLFW.GLFW_CONTEXT_VERSION_MINOR;
+import static org.lwjgl.glfw.GLFW.GLFW_FALSE;
+import static org.lwjgl.glfw.GLFW.GLFW_GREEN_BITS;
+import static org.lwjgl.glfw.GLFW.GLFW_OPENGL_CORE_PROFILE;
+import static org.lwjgl.glfw.GLFW.GLFW_OPENGL_FORWARD_COMPAT;
+import static org.lwjgl.glfw.GLFW.GLFW_OPENGL_PROFILE;
+import static org.lwjgl.glfw.GLFW.GLFW_PRESS;
+import static org.lwjgl.glfw.GLFW.GLFW_RED_BITS;
+import static org.lwjgl.glfw.GLFW.GLFW_REFRESH_RATE;
+import static org.lwjgl.glfw.GLFW.GLFW_RELEASE;
+import static org.lwjgl.glfw.GLFW.GLFW_RESIZABLE;
+import static org.lwjgl.glfw.GLFW.GLFW_VISIBLE;
+import static org.lwjgl.glfw.GLFW.glfwCreateWindow;
+import static org.lwjgl.glfw.GLFW.glfwGetPrimaryMonitor;
+import static org.lwjgl.glfw.GLFW.glfwGetVideoMode;
+import static org.lwjgl.glfw.GLFW.glfwInit;
+import static org.lwjgl.glfw.GLFW.glfwMakeContextCurrent;
+import static org.lwjgl.glfw.GLFW.glfwPollEvents;
+import static org.lwjgl.glfw.GLFW.glfwSetCursorPosCallback;
+import static org.lwjgl.glfw.GLFW.glfwSetKeyCallback;
+import static org.lwjgl.glfw.GLFW.glfwSetMouseButtonCallback;
+import static org.lwjgl.glfw.GLFW.glfwShowWindow;
+import static org.lwjgl.glfw.GLFW.glfwSwapBuffers;
+import static org.lwjgl.glfw.GLFW.glfwSwapInterval;
+import static org.lwjgl.glfw.GLFW.glfwTerminate;
+import static org.lwjgl.glfw.GLFW.glfwWindowHint;
+import static org.lwjgl.glfw.GLFW.glfwWindowShouldClose;
+import static org.lwjgl.opengl.GL11.GL_BACK;
+import static org.lwjgl.opengl.GL11.GL_CCW;
+import static org.lwjgl.opengl.GL11.GL_COLOR_BUFFER_BIT;
+import static org.lwjgl.opengl.GL11.GL_CULL_FACE;
+import static org.lwjgl.opengl.GL11.GL_DEPTH_BUFFER_BIT;
+import static org.lwjgl.opengl.GL11.GL_DEPTH_TEST;
+import static org.lwjgl.opengl.GL11.GL_FLOAT;
+import static org.lwjgl.opengl.GL11.GL_LEQUAL;
+import static org.lwjgl.opengl.GL11.GL_RGB;
+import static org.lwjgl.opengl.GL11.GL_RGB8;
+import static org.lwjgl.opengl.GL11.GL_TEXTURE_2D;
+import static org.lwjgl.opengl.GL11.GL_TRIANGLES;
+import static org.lwjgl.opengl.GL11.GL_TRUE;
+import static org.lwjgl.opengl.GL11.GL_UNSIGNED_BYTE;
+import static org.lwjgl.opengl.GL11.glBindTexture;
+import static org.lwjgl.opengl.GL11.glClear;
+import static org.lwjgl.opengl.GL11.glClearColor;
+import static org.lwjgl.opengl.GL11.glClearDepth;
+import static org.lwjgl.opengl.GL11.glCullFace;
+import static org.lwjgl.opengl.GL11.glDeleteTextures;
+import static org.lwjgl.opengl.GL11.glDepthFunc;
+import static org.lwjgl.opengl.GL11.glDepthMask;
+import static org.lwjgl.opengl.GL11.glDepthRange;
+import static org.lwjgl.opengl.GL11.glDisable;
+import static org.lwjgl.opengl.GL11.glDrawArrays;
+import static org.lwjgl.opengl.GL11.glEnable;
+import static org.lwjgl.opengl.GL11.glFrontFace;
+import static org.lwjgl.opengl.GL15.GL_ARRAY_BUFFER;
+import static org.lwjgl.opengl.GL15.glBindBuffer;
+import static org.lwjgl.opengl.GL15.glDeleteBuffers;
+import static org.lwjgl.opengl.GL20.GL_COMPILE_STATUS;
+import static org.lwjgl.opengl.GL20.GL_FRAGMENT_SHADER;
+import static org.lwjgl.opengl.GL20.GL_LINK_STATUS;
+import static org.lwjgl.opengl.GL20.GL_VERTEX_SHADER;
+import static org.lwjgl.opengl.GL20.glAttachShader;
+import static org.lwjgl.opengl.GL20.glCompileShader;
+import static org.lwjgl.opengl.GL20.glCreateProgram;
+import static org.lwjgl.opengl.GL20.glCreateShader;
+import static org.lwjgl.opengl.GL20.glDeleteProgram;
+import static org.lwjgl.opengl.GL20.glDeleteShader;
+import static org.lwjgl.opengl.GL20.glDetachShader;
+import static org.lwjgl.opengl.GL20.glGetProgramInfoLog;
+import static org.lwjgl.opengl.GL20.glGetProgrami;
+import static org.lwjgl.opengl.GL20.glGetShaderInfoLog;
+import static org.lwjgl.opengl.GL20.glGetShaderi;
+import static org.lwjgl.opengl.GL20.glGetUniformLocation;
+import static org.lwjgl.opengl.GL20.glLinkProgram;
+import static org.lwjgl.opengl.GL20.glShaderSource;
+import static org.lwjgl.opengl.GL20.glUniformMatrix3fv;
+import static org.lwjgl.opengl.GL20.glUniformMatrix4fv;
+import static org.lwjgl.opengl.GL20.glUseProgram;
+import static org.lwjgl.opengl.GL30.glBindBufferBase;
+import static org.lwjgl.opengl.GL30.glBindVertexArray;
+import static org.lwjgl.opengl.GL30.glDeleteVertexArrays;
+import static org.lwjgl.opengl.GL31.GL_UNIFORM_BUFFER;
+import static org.lwjgl.opengl.GL31.glGetUniformBlockIndex;
+import static org.lwjgl.opengl.GL31.glUniformBlockBinding;
+import static org.lwjgl.opengl.GL32.GL_DEPTH_CLAMP;
+import static org.lwjgl.opengl.GL44.GL_DYNAMIC_STORAGE_BIT;
+import static org.lwjgl.opengl.GL45.glCreateBuffers;
+import static org.lwjgl.opengl.GL45.glCreateTextures;
+import static org.lwjgl.opengl.GL45.glCreateVertexArrays;
+import static org.lwjgl.opengl.GL45.glEnableVertexArrayAttrib;
+import static org.lwjgl.opengl.GL45.glNamedBufferStorage;
+import static org.lwjgl.opengl.GL45.glNamedBufferSubData;
+import static org.lwjgl.opengl.GL45.glTextureStorage2D;
+import static org.lwjgl.opengl.GL45.glTextureSubImage2D;
+import static org.lwjgl.opengl.GL45.glVertexArrayAttribBinding;
+import static org.lwjgl.opengl.GL45.glVertexArrayAttribFormat;
+import static org.lwjgl.opengl.GL45.glVertexArrayVertexBuffer;
+import static org.lwjgl.system.MemoryUtil.NULL;
 
 import java.awt.Color;
 import java.awt.image.BufferedImage;
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.net.URISyntaxException;
+import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumMap;
 import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Set;
+import java.util.zip.ZipFile;
+import java.util.zip.ZipInputStream;
 
+import org.joml.Matrix3f;
+import org.joml.Matrix4f;
+import org.joml.Vector3f;
+import org.joml.Vector4f;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.glfw.GLFWCursorPosCallback;
 import org.lwjgl.glfw.GLFWErrorCallback;
@@ -38,125 +137,375 @@ import org.lwjgl.glfw.GLFWKeyCallback;
 import org.lwjgl.glfw.GLFWMouseButtonCallback;
 import org.lwjgl.glfw.GLFWVidMode;
 import org.lwjgl.opengl.GL;
-import org.lwjgl.opengl.GLDebugMessageCallback;
-import org.lwjgl.system.MemoryUtil;
+
+// import static org.lwjgl.glfw.GLFW.*;
+// import static org.lwjgl.opengl.GL11.*;
+// import static org.lwjgl.opengl.GL12.*;
+// import static org.lwjgl.opengl.GL13.*;
+// import static org.lwjgl.opengl.GL14.*;
+// import static org.lwjgl.opengl.GL15.*;
+// import static org.lwjgl.opengl.GL20.*;
+// import static org.lwjgl.opengl.GL21.*;
+// import static org.lwjgl.opengl.GL30.*;
+// import static org.lwjgl.opengl.GL31.*;
+// import static org.lwjgl.opengl.GL32.*;
+// import static org.lwjgl.opengl.GL33.*;
+// import static org.lwjgl.opengl.GL40.*;
+// import static org.lwjgl.opengl.GL41.*;
+// import static org.lwjgl.opengl.GL42.*;
+// import static org.lwjgl.opengl.GL43.*;
+// import static org.lwjgl.opengl.GL44.*;
+// import static org.lwjgl.opengl.GL45.*;
+// import static org.lwjgl.system.MemoryUtil.*;
 
 @SuppressWarnings({"unused", "static-method"})
 class Window {
 
-  private GLDebugMessageCallback debugCallback = new GLDebugMessageCallback() {
-    @Override
-    public void invoke(int source, int type, int id, int severity, int length, long message, long userParam) {
-      String sourceS;
-      switch (source) {
-        case GL_DEBUG_SOURCE_API:
-          sourceS = "API";
-          break;
-        case GL_DEBUG_SOURCE_APPLICATION:
-          sourceS = "Application";
-          break;
-        case GL_DEBUG_SOURCE_SHADER_COMPILER:
-          sourceS = "Shader_compiler";
-          break;
-        case GL_DEBUG_SOURCE_THIRD_PARTY:
-          sourceS = "Third_party";
-          break;
-        case GL_DEBUG_SOURCE_WINDOW_SYSTEM:
-          sourceS = "Window_system";
-          break;
-        case GL_DEBUG_SOURCE_OTHER:
-        default:
-          sourceS = "Autre";
-          break;
-      }
-      String typeS;
-      switch (type) {
-        case GL_DEBUG_TYPE_ERROR:
-          typeS = "Error";
-          break;
-        case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR:
-          typeS = "Deprecated_bhvr";
-          break;
-        case GL_DEBUG_TYPE_MARKER:
-          typeS = "Marker";
-          break;
-        case GL_DEBUG_TYPE_PERFORMANCE:
-          typeS = "Performance";
-          break;
-        case GL_DEBUG_TYPE_POP_GROUP:
-          typeS = "Pop_group";
-          break;
-        case GL_DEBUG_TYPE_PUSH_GROUP:
-          typeS = "Push_group";
-          break;
-        case GL_DEBUG_TYPE_PORTABILITY:
-          typeS = "Portability";
-          break;
-        case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR:
-          typeS = "Undefined_bhvr";
-          break;
-        case GL_DEBUG_TYPE_OTHER:
-        default:
-          typeS = "Autre";
-          break;
-      }
-      String severityS;
-      switch (severity) {
-        case GL_DEBUG_SEVERITY_HIGH:
-          severityS = "Haute";
-          break;
-        case GL_DEBUG_SEVERITY_MEDIUM:
-          severityS = "Moyen";
-          break;
-        case GL_DEBUG_SEVERITY_LOW:
-          severityS = "Bas";
-          break;
-        case GL_DEBUG_SEVERITY_NOTIFICATION:
-          severityS = "Notification";
-          break;
-        default:
-          severityS = "Autre";
-          break;
-      }
-      String printMessage = "Source: " + sourceS + " - Type: " + typeS + " - Sévérité: " + severityS + " - Message: "
-          + MemoryUtil.memDecodeUTF8(MemoryUtil.memByteBuffer(message, length));
-      if (severity == GL_DEBUG_SEVERITY_NOTIFICATION) {
-        System.out.println(printMessage);
-      } else {
-        System.err.println(printMessage);
-        Thread.dumpStack();
-      }
+  public enum Model {
+    PLAYER("player"), MONSTER("player"), BALL("player");
+
+    private String modelFile;
+
+    private Model(String modelFile) {
+      this.modelFile = modelFile;
     }
-  };
+  }
+
+  private static class Mesh {
+    public final int buffer;
+    public final int bindingPoint;
+    public final int vertices;
+
+    public Mesh(int buffer, int bindingPoint, int vertices) {
+      this.buffer = buffer;
+      this.bindingPoint = bindingPoint;
+      this.vertices = vertices;
+    }
+  }
 
   private long window;
-  private int vao, circleBuffer, triangleBuffer, backgroundBuffer;
-  private int indexX, indexY, indexRotateMatrix, indexScale, indexColor, indexOffset;
+  private GLFWKeyCallback keyCallback;
+  private GLFWCursorPosCallback cursorPosCallback;
+  private GLFWMouseButtonCallback mouseButtonCallback;
+
+  private int vao;
+  private int indexP, indexVM, indexVMNormal;
+  private int indexTexMatrix;
+  private int indexLight;
+  private int backgroundBuffer, texture;
   private int program, textureProgram;
-  int texture;
 
-  private static final float[] circlePositions;
-  static {
-    int max = 20;
-    float[] positions = new float[2 * (max + 2)];
-    positions[0] = 0.0f;
-    positions[1] = 0.0f;
-    for (int i = 0; i <= max; i++) {
-      positions[2 * i + 2] = (float) Math.cos(Math.PI * 2 * i / max);
-      positions[2 * i + 3] = (float) Math.sin(Math.PI * 2 * i / max);
-    }
-    circlePositions = positions;
-  }
-  private static final float[] trianglePositions = {-0.5f, -0.5f, -0.5f, 0.5f, 1.0f, 0.0f};
 
-  private static final float[] backgroundPositions = {-1.0f, -1.0f, -1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, -1.0f, -1.0f, 1.0f, -1.0f};
+  private static final int maxNumberOfLights = 1000;
+  private static final float cameraAngle = 0;
+  private static final float cameraDistance = 5000;
+  private float cameraX = 0, cameraY = 0;
+
+  private EnumMap<Model, Mesh> meshes = new EnumMap<>(Model.class);
 
   private Set<Integer> keysState = new HashSet<>(20);
   private Set<Integer> mouseState = new HashSet<>(3);
   private Set<Integer> newKeys = new HashSet<>(2);
   private Set<Integer> newMouse = new HashSet<>(3);
+
   private double mouseX, mouseY;
   private int width, height;
+  private BufferedImage image;
+
+  private List<RenderEntity> entities;
+  private List<Light> lights;
+
+  public void renderLight(Light light) {
+    lights.add(light);
+  }
+
+  public void renderEntity(RenderEntity entity) {
+    entities.add(entity);
+  }
+
+  /**
+   * @param x Coordonnée x du point au centre de l'écran
+   * @param y Coordonnée y du point au centre de l'écran
+   */
+  public void beginRender(float x, float y) {
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    cameraX = x;
+    cameraY = y;
+    entities = new LinkedList<>();
+    lights = new LinkedList<>();
+  }
+
+  public void endRender() {
+    // actually start render here
+
+    // 1. Update the light buffer
+
+    Color ambientColor = new Color(0.2f, 0.2f, 0.2f);
+    float midAttenuationDistance = 3000f;
+    float maxIntensity = 1.5f;
+    float gamma = 2.2f;
+
+    ByteBuffer bb = BufferUtils.createByteBuffer(32 + 48 * maxNumberOfLights);
+    bb.putFloat(ambientColor.getRed() / 256f).putFloat(ambientColor.getGreen() / 256f).putFloat(ambientColor.getBlue() / 256f).putFloat(1.0f);
+    bb.putFloat(1 / (midAttenuationDistance * midAttenuationDistance));
+    bb.putFloat(maxIntensity);
+    bb.putFloat(1 / gamma);
+    bb.putInt(lights.size());
+
+    for (Light light : lights) {
+      Vector4f lightCameraPosition = calcLookAt(cameraX, cameraY).transform(new Vector4f(light.x, light.y, 150, 1));
+      bb.putFloat(lightCameraPosition.x).putFloat(lightCameraPosition.y).putFloat(lightCameraPosition.z).putFloat(lightCameraPosition.w);
+      bb.putFloat(light.color.getRed() / 256f).putFloat(light.color.getGreen() / 256f).putFloat(light.color.getBlue() / 256f).putFloat(1.0f);
+      bb.putFloat(light.x).putFloat(light.y);
+      bb.putFloat(0).putFloat(0); // padding
+    }
+
+    bb.flip();
+    glNamedBufferSubData(indexLight, 0, bb);
+
+    // 2. Draw background
+
+    glDisable(GL_CULL_FACE);
+    glDisable(GL_DEPTH_TEST);
+    glDepthMask(false);
+    glUseProgram(textureProgram);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glVertexArrayAttribBinding(vao, 0, 0);
+    glVertexArrayAttribFormat(vao, 0, 2, GL_FLOAT, false, 0);
+    glBindBuffer(GL_ARRAY_BUFFER, backgroundBuffer);
+    Matrix4f pTex = new Matrix4f().scale(2f / width, 2f / height, 0).translate(-cameraX, -cameraY, 0);
+    FloatBuffer fbTex = BufferUtils.createFloatBuffer(16);
+    glUniformMatrix4fv(indexTexMatrix, false, pTex.get(fbTex));
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+    glVertexArrayAttribFormat(vao, 0, 3, GL_FLOAT, false, 0);
+    glVertexArrayAttribFormat(vao, 1, 3, GL_FLOAT, false, Float.BYTES * 3);
+    glVertexArrayAttribFormat(vao, 2, 3, GL_FLOAT, false, Float.BYTES * 6);
+    glUseProgram(program);
+    glEnable(GL_CULL_FACE);
+    glEnable(GL_DEPTH_TEST);
+    glDepthMask(true);
+
+    // 3. Draw entities
+
+    Matrix4f p = new Matrix4f().setOrthoSymmetric(width, height, 0.1f, 10000);
+    Matrix4f v = calcLookAt(cameraX, cameraY);
+    FloatBuffer fb = BufferUtils.createFloatBuffer(16);
+    glUniformMatrix4fv(indexP, false, p.get(fb));
+
+    for (RenderEntity entity : entities) {
+      Mesh mesh = meshes.get(entity.model);
+      Matrix4f m = new Matrix4f().translate(entity.x, entity.y, 0).rotateX((float) (-Math.PI / 6)).rotateZ(entity.angle + (float) Math.PI / 2)
+          .scale(entity.scale);
+      Matrix4f vm = v.mul(m, new Matrix4f());
+      Matrix3f vmNormal = new Matrix3f(vm);
+      fb.clear();
+      glUniformMatrix4fv(indexVM, false, vm.get(fb));
+      glUniformMatrix3fv(indexVMNormal, false, (FloatBuffer) vmNormal.get(fb).limit(9));
+      glVertexArrayAttribBinding(vao, 0, mesh.bindingPoint);
+      glVertexArrayAttribBinding(vao, 1, mesh.bindingPoint);
+      glVertexArrayAttribBinding(vao, 2, mesh.bindingPoint);
+      glBindBuffer(GL_ARRAY_BUFFER, mesh.buffer);
+      glDrawArrays(GL_TRIANGLES, 0, mesh.vertices);
+    }
+
+    glfwSwapBuffers(window);
+  }
+
+  private void initBuffers() throws IOException {
+    glUseProgram(textureProgram);
+
+    int[] pixels = new int[image.getWidth() * image.getHeight()];
+    image.getRGB(0, 0, image.getWidth(), image.getHeight(), pixels, 0, image.getWidth());
+
+    ByteBuffer buffer = BufferUtils.createByteBuffer(image.getWidth() * image.getHeight() * 3);
+
+    for (int y = image.getHeight() - 1; y >= 0; y--) {
+      for (int x = 0; x < image.getWidth(); x++) {
+        int pixel = pixels[y * image.getWidth() + x];
+        buffer.put((byte) (pixel >> 16 & 0xFF)); // Red component
+        buffer.put((byte) (pixel >> 8 & 0xFF)); // Green component
+        buffer.put((byte) (pixel & 0xFF)); // Blue component
+      }
+    }
+    buffer.flip();
+
+    texture = glCreateTextures(GL_TEXTURE_2D);
+    glTextureStorage2D(texture, 1, GL_RGB8, image.getWidth(), image.getHeight());
+    glTextureSubImage2D(texture, 0, 0, 0, image.getWidth(), image.getHeight(), GL_RGB, GL_UNSIGNED_BYTE, buffer);
+
+    float[] backgroundPositions =
+        {0, 0, 0, image.getHeight(), image.getWidth(), image.getHeight(), image.getWidth(), image.getHeight(), image.getWidth(), 0, 0, 0};
+    backgroundBuffer = glCreateBuffers();
+    FloatBuffer fb = BufferUtils.createFloatBuffer(backgroundPositions.length);
+    fb.put(backgroundPositions);
+    fb.flip();
+    glNamedBufferStorage(backgroundBuffer, fb, 0);
+    glVertexArrayVertexBuffer(vao, 0, backgroundBuffer, 0, Float.BYTES * 2);
+    glVertexArrayAttribFormat(vao, 0, 2, GL_FLOAT, false, 0);
+    glUseProgram(program);
+
+    for (int i = 0; i < Model.values().length; i++) {
+      loadModel(Model.values()[i], i + 1);
+    }
+
+    glVertexArrayAttribFormat(vao, 0, 3, GL_FLOAT, false, 0);
+    glVertexArrayAttribFormat(vao, 1, 3, GL_FLOAT, false, Float.BYTES * 3);
+    glVertexArrayAttribFormat(vao, 2, 3, GL_FLOAT, false, Float.BYTES * 6);
+    glEnableVertexArrayAttrib(vao, 0);
+    glEnableVertexArrayAttrib(vao, 1);
+    glEnableVertexArrayAttrib(vao, 2);
+
+    indexLight = glCreateBuffers();
+    glNamedBufferStorage(indexLight, 32 + maxNumberOfLights * 48, GL_DYNAMIC_STORAGE_BIT);
+    glBindBufferBase(GL_UNIFORM_BUFFER, 0, indexLight);
+  }
+
+  private void initUniforms() {
+    indexP = glGetUniformLocation(program, "p");
+    indexVM = glGetUniformLocation(program, "vm");
+    indexVMNormal = glGetUniformLocation(program, "vmNormal");
+    glUniformBlockBinding(program, glGetUniformBlockIndex(program, "Light"), 0);
+    glUseProgram(textureProgram);
+    indexTexMatrix = glGetUniformLocation(textureProgram, "texMatrix");
+    glUniformBlockBinding(textureProgram, glGetUniformBlockIndex(textureProgram, "Light"), 0);
+    glUseProgram(program);
+  }
+
+  private void initPrograms() {
+    int vertShader = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(vertShader, readFile("tex.vert"));
+    glCompileShader(vertShader);
+    if (glGetShaderi(vertShader, GL_COMPILE_STATUS) != GL_TRUE) {
+      throw new RuntimeException(glGetShaderInfoLog(vertShader));
+    }
+    int fragShader = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(fragShader, readFile("tex.frag"));
+    glCompileShader(fragShader);
+    if (glGetShaderi(fragShader, GL_COMPILE_STATUS) != GL_TRUE) {
+      throw new RuntimeException(glGetShaderInfoLog(fragShader));
+    }
+    textureProgram = glCreateProgram();
+    glAttachShader(textureProgram, vertShader);
+    glAttachShader(textureProgram, fragShader);
+    glLinkProgram(textureProgram);
+    if (glGetProgrami(textureProgram, GL_LINK_STATUS) != GL_TRUE) {
+      throw new RuntimeException(glGetProgramInfoLog(textureProgram));
+    }
+    glDetachShader(textureProgram, vertShader);
+    glDetachShader(textureProgram, fragShader);
+    glDeleteShader(vertShader);
+    glDeleteShader(fragShader);
+
+    vertShader = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(vertShader, readFile("std.vert"));
+    glCompileShader(vertShader);
+    if (glGetShaderi(vertShader, GL_COMPILE_STATUS) != GL_TRUE) {
+      throw new RuntimeException(glGetShaderInfoLog(vertShader));
+    }
+    fragShader = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(fragShader, readFile("std.frag"));
+    glCompileShader(fragShader);
+    if (glGetShaderi(fragShader, GL_COMPILE_STATUS) != GL_TRUE) {
+      throw new RuntimeException(glGetShaderInfoLog(fragShader));
+    }
+    program = glCreateProgram();
+    glAttachShader(program, vertShader);
+    glAttachShader(program, fragShader);
+    glLinkProgram(program);
+    if (glGetProgrami(program, GL_LINK_STATUS) != GL_TRUE) {
+      throw new RuntimeException(glGetProgramInfoLog(program));
+    }
+    glDetachShader(program, vertShader);
+    glDetachShader(program, fragShader);
+    glDeleteShader(vertShader);
+    glDeleteShader(fragShader);
+    glUseProgram(program);
+  }
+
+  private void initGL() {
+    GL.createCapabilities(true);
+
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_BACK);
+    glFrontFace(GL_CCW);
+
+    glEnable(GL_DEPTH_TEST);
+    glDepthMask(true);
+    glDepthFunc(GL_LEQUAL);
+    glDepthRange(0, 1);
+    glEnable(GL_DEPTH_CLAMP);
+
+    glClearColor(0, 0, 0, 0);
+    glClearDepth(1);
+
+    vao = glCreateVertexArrays();
+    glBindVertexArray(vao);
+  }
+
+  private void initGLFW() {
+    GLFWErrorCallback.createString((error, description) -> {
+      System.err.println("Erreur GFLW : " + description);
+    });
+    if (glfwInit() != GL_TRUE) {
+      throw new IllegalStateException("Unable to initialize GLFW");
+    }
+
+    glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+
+    GLFWVidMode vidmode = glfwGetVideoMode(glfwGetPrimaryMonitor());
+    glfwWindowHint(GLFW_RED_BITS, vidmode.redBits());
+    glfwWindowHint(GLFW_GREEN_BITS, vidmode.greenBits());
+    glfwWindowHint(GLFW_BLUE_BITS, vidmode.blueBits());
+    glfwWindowHint(GLFW_REFRESH_RATE, vidmode.refreshRate());
+
+    window = glfwCreateWindow(vidmode.width(), vidmode.height(), Client.GAME_NAME, glfwGetPrimaryMonitor(), NULL);
+    width = vidmode.width();
+    height = vidmode.height();
+
+    if (window == NULL) {
+      throw new RuntimeException("Failed to create the GLFW window");
+    }
+
+    glfwSetKeyCallback(window, keyCallback = new GLFWKeyCallback() {
+      @Override
+      public void invoke(long window, int key, int scancode, int action, int mods) {
+        if (action == GLFW_PRESS) {
+          newKeys.add(scancode);
+          keysState.add(scancode);
+        } else if (action == GLFW_RELEASE) {
+          keysState.remove(scancode);
+        }
+      }
+    });
+
+    glfwSetCursorPosCallback(window, cursorPosCallback = new GLFWCursorPosCallback() {
+      @Override
+      public void invoke(long window, double xpos, double ypos) {
+        mouseX = xpos;
+        mouseY = ypos;
+      }
+    });
+
+    glfwSetMouseButtonCallback(window, mouseButtonCallback = new GLFWMouseButtonCallback() {
+      @Override
+      public void invoke(long window, int button, int action, int mods) {
+        if (action == GLFW_PRESS) {
+          newMouse.add(button);
+          mouseState.add(button);
+        } else if (action == GLFW_RELEASE) {
+          mouseState.remove(button);
+        }
+      }
+    });
+
+    glfwMakeContextCurrent(window);
+    glfwSwapInterval(1);
+  }
 
   public void pollInput() {
     glfwPollEvents();
@@ -204,245 +553,117 @@ class Window {
     return glfwWindowShouldClose(window) == GL_TRUE;
   }
 
-  public void beginRender() {
-    glClear(GL_COLOR_BUFFER_BIT);
-  }
-
-  private void prepareUniforms(float x, float y, float angle, float scale, Color color) {
-    glUniform1f(indexX, x);
-    glUniform1f(indexY, y);
-    float cosine = (float) Math.cos(angle);
-    float sine = (float) Math.sin(angle);
-    float[] matrixData = {cosine, sine, -sine, cosine};
-    glUniformMatrix2fv(indexRotateMatrix, false, (FloatBuffer) BufferUtils.createFloatBuffer(matrixData.length).put(matrixData).flip());
-    glUniform1f(indexScale, scale);
-    glUniform3f(indexColor, color.getRed() / 256f, color.getGreen() / 256f, color.getBlue() / 256f);
-  }
-
-  public void renderTriangle(float x, float y, float angle, float scale, Color color) {
-    prepareUniforms(x, y, angle, scale, color);
-    glVertexArrayAttribBinding(vao, 0, 1);
-    glBindBuffer(GL_ARRAY_BUFFER, triangleBuffer);
-    glDrawArrays(GL_TRIANGLES, 0, trianglePositions.length / 2);
-  }
-
-  public void renderCircle(float x, float y, float angle, float scale, Color color) {
-    prepareUniforms(x, y, angle, scale, color);
-    glVertexArrayAttribBinding(vao, 0, 0);
-    glBindBuffer(GL_ARRAY_BUFFER, circleBuffer);
-    glDrawArrays(GL_TRIANGLE_FAN, 0, (circlePositions.length - 4) / 2);
-  }
-
-  /**
-   * @param x Le début de l'image en x (coin en bas à gauche)
-   * @param y Le début de l'image en y (coin en bas à gauche)
-   */
-  public void renderImage(int x, int y) {
-    glUseProgram(textureProgram);
-    glBindTexture(GL_TEXTURE_2D, texture);
-    glVertexArrayAttribBinding(vao, 0, 2);
-    glBindBuffer(GL_ARRAY_BUFFER, backgroundBuffer);
-    glUniform2i(indexOffset, x, y);
-    glDrawArrays(GL_TRIANGLES, 0, backgroundPositions.length / 2);
-    glUseProgram(program);
-  }
-
-  public void endRender() {
-    glfwSwapBuffers(window);
-  }
-
-  public void start() {
-    GLFWErrorCallback.createString((error, description) -> {
-      System.err.println("hou " + description);
-    });
-    if (glfwInit() != GL_TRUE) {
-      throw new IllegalStateException("Unable to initialize GLFW");
-    }
-
-    glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-
-    GLFWVidMode vidmode = glfwGetVideoMode(glfwGetPrimaryMonitor());
-    glfwWindowHint(GLFW_RED_BITS, vidmode.redBits());
-    glfwWindowHint(GLFW_GREEN_BITS, vidmode.greenBits());
-    glfwWindowHint(GLFW_BLUE_BITS, vidmode.blueBits());
-    glfwWindowHint(GLFW_REFRESH_RATE, vidmode.refreshRate());
-
-    window = glfwCreateWindow(vidmode.width(), vidmode.height(), Client.GAME_NAME, glfwGetPrimaryMonitor(), NULL);
-    width = vidmode.width();
-    height = vidmode.height();
-
-    if (window == NULL) {
-      throw new RuntimeException("Failed to create the GLFW window");
-    }
-
-    glfwSetKeyCallback(window, new GLFWKeyCallback() {
-      @Override
-      public void invoke(long window, int key, int scancode, int action, int mods) {
-        if (action == GLFW_PRESS) {
-          newKeys.add(scancode);
-          keysState.add(scancode);
-        } else if (action == GLFW_RELEASE) {
-          keysState.remove(scancode);
-        }
-      }
-    });
-
-    glfwSetCursorPosCallback(window, new GLFWCursorPosCallback() {
-      @Override
-      public void invoke(long window, double xpos, double ypos) {
-        mouseX = xpos;
-        mouseY = ypos;
-      }
-    });
-
-    glfwSetMouseButtonCallback(window, new GLFWMouseButtonCallback() {
-      @Override
-      public void invoke(long window, int button, int action, int mods) {
-        if (action == GLFW_PRESS) {
-          newMouse.add(button);
-          mouseState.add(button);
-        } else if (action == GLFW_RELEASE) {
-          mouseState.remove(button);
-        }
-      }
-    });
-
-    glfwMakeContextCurrent(window);
-    glfwSwapInterval(1);
-
-    GL.createCapabilities(true);
-
-    // TODO disable debug in later "production" builds
-    glEnable(GL_DEBUG_OUTPUT);
-    glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
-    glDebugMessageCallback(debugCallback, 0L);
-
-    glClearColor(0, 0, 0, 0);
-
-    int vertShader = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vertShader, readFile("tex.vert"));
-    glCompileShader(vertShader);
-    if (glGetShaderi(vertShader, GL_COMPILE_STATUS) != GL_TRUE) {
-      throw new RuntimeException(glGetShaderInfoLog(vertShader));
-    }
-    int fragShader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragShader, readFile("tex.frag"));
-    glCompileShader(fragShader);
-    if (glGetShaderi(fragShader, GL_COMPILE_STATUS) != GL_TRUE) {
-      throw new RuntimeException(glGetShaderInfoLog(fragShader));
-    }
-    textureProgram = glCreateProgram();
-    glAttachShader(textureProgram, vertShader);
-    glAttachShader(textureProgram, fragShader);
-    glLinkProgram(textureProgram);
-    if (glGetProgrami(textureProgram, GL_LINK_STATUS) != GL_TRUE) {
-      throw new RuntimeException(glGetProgramInfoLog(textureProgram));
-    }
-    glDetachShader(textureProgram, vertShader);
-    glDetachShader(textureProgram, fragShader);
-    glDeleteShader(vertShader);
-    glDeleteShader(fragShader);
-
-    indexOffset = glGetUniformLocation(textureProgram, "offset");
-
-    vertShader = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vertShader, readFile("std.vert"));
-    glCompileShader(vertShader);
-    if (glGetShaderi(vertShader, GL_COMPILE_STATUS) != GL_TRUE) {
-      throw new RuntimeException(glGetShaderInfoLog(vertShader));
-    }
-    fragShader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragShader, readFile("std.frag"));
-    glCompileShader(fragShader);
-    if (glGetShaderi(fragShader, GL_COMPILE_STATUS) != GL_TRUE) {
-      throw new RuntimeException(glGetShaderInfoLog(fragShader));
-    }
-    program = glCreateProgram();
-    glAttachShader(program, vertShader);
-    glAttachShader(program, fragShader);
-    glLinkProgram(program);
-    if (glGetProgrami(program, GL_LINK_STATUS) != GL_TRUE) {
-      throw new RuntimeException(glGetProgramInfoLog(program));
-    }
-    glDetachShader(program, vertShader);
-    glDetachShader(program, fragShader);
-    glDeleteShader(vertShader);
-    glDeleteShader(fragShader);
-    glUseProgram(program);
-
-    vao = glCreateVertexArrays();
-    glBindVertexArray(vao);
-
-    glEnableVertexArrayAttrib(vao, 0);
-
-    circleBuffer = glCreateBuffers();
-    glNamedBufferStorage(circleBuffer, (FloatBuffer) BufferUtils.createFloatBuffer(circlePositions.length).put(circlePositions).flip(), 0);
-    glVertexArrayVertexBuffer(vao, 0, circleBuffer, 0, Float.BYTES * 2);
-    glVertexArrayAttribBinding(vao, 0, 0);
-    glVertexArrayAttribFormat(vao, 0, 2, GL_FLOAT, false, 0);
-
-    triangleBuffer = glCreateBuffers();
-    glNamedBufferStorage(triangleBuffer, (FloatBuffer) BufferUtils.createFloatBuffer(trianglePositions.length).put(trianglePositions).flip(), 0);
-    glVertexArrayVertexBuffer(vao, 1, triangleBuffer, 0, Float.BYTES * 2);
-    glVertexArrayAttribBinding(vao, 0, 1);
-    glVertexArrayAttribFormat(vao, 0, 2, GL_FLOAT, false, 0);
-
-    backgroundBuffer = glCreateBuffers();
-    glNamedBufferStorage(backgroundBuffer, (FloatBuffer) BufferUtils.createFloatBuffer(backgroundPositions.length).put(backgroundPositions).flip(),
-        0);
-    glVertexArrayVertexBuffer(vao, 2, backgroundBuffer, 0, Float.BYTES * 2);
-    glVertexArrayAttribBinding(vao, 0, 2);
-    glVertexArrayAttribFormat(vao, 2, 2, GL_FLOAT, false, 0);
-
-    indexX = glGetUniformLocation(program, "x");
-    indexY = glGetUniformLocation(program, "y");
-    indexRotateMatrix = glGetUniformLocation(program, "rotateMatrix");
-    indexScale = glGetUniformLocation(program, "scale");
-    indexColor = glGetUniformLocation(program, "color");
-
-    int indexProjectMatrix = glGetUniformLocation(program, "projectMatrix");
-    float[] projectMatrixData = {2.0f / width, 0, 0, -1, 0, 2.0f / height, 0, -1, 0, 0, 1.0f, 0, 0, 0, 0, 1.0f};
-    glUniformMatrix4fv(indexProjectMatrix, true, (FloatBuffer) BufferUtils.createFloatBuffer(projectMatrixData.length).put(projectMatrixData).flip());
-
+  public void start() throws IOException {
+    initGLFW();
+    initGL();
+    initPrograms();
+    initUniforms();
+    initBuffers();
     glfwShowWindow(window);
-
-  }
-
-  public void setBackground(BufferedImage image) {
-    glUseProgram(textureProgram);
-    int[] pixels = new int[image.getWidth() * image.getHeight()];
-    image.getRGB(0, 0, image.getWidth(), image.getHeight(), pixels, 0, image.getWidth());
-
-    ByteBuffer buffer = BufferUtils.createByteBuffer(image.getWidth() * image.getHeight() * 3);
-
-    for (int y = image.getHeight() - 1; y >= 0; y--) {
-      for (int x = 0; x < image.getWidth(); x++) {
-        int pixel = pixels[y * image.getWidth() + x];
-        buffer.put((byte) (pixel >> 16 & 0xFF)); // Red component
-        buffer.put((byte) (pixel >> 8 & 0xFF)); // Green component
-        buffer.put((byte) (pixel & 0xFF)); // Blue component
-      }
-    }
-    buffer.flip();
-
-    texture = glCreateTextures(GL_TEXTURE_2D);
-    glTextureStorage2D(texture, 1, GL_RGB8, image.getWidth(), image.getHeight());
-    glTextureSubImage2D(texture, 0, 0, 0, image.getWidth(), image.getHeight(), GL_RGB, GL_UNSIGNED_BYTE, buffer);
   }
 
   public void exit() {
-    glDeleteBuffers(circleBuffer);
-    glDeleteBuffers(triangleBuffer);
     glDeleteBuffers(backgroundBuffer);
+    for (Mesh mesh : meshes.values()) {
+      glDeleteBuffers(mesh.buffer);
+    }
+    glDeleteBuffers(indexLight);
+    glDeleteTextures(texture);
     glDeleteVertexArrays(vao);
     glDeleteProgram(program);
     glDeleteProgram(textureProgram);
     glfwTerminate();
+  }
+
+  public Window(BufferedImage image) {
+    this.image = image;
+  }
+
+  private static Matrix4f calcLookAt(float x, float y) {
+    Vector3f eye = new Vector3f(x, (float) (y - cameraDistance * Math.sin(cameraAngle)), (float) (cameraDistance * Math.cos(cameraAngle)));
+    Vector3f center = new Vector3f(x, y, 0);
+    Vector3f temp = new Vector3f(1, 0, 0);
+    temp.cross(eye.sub(center, new Vector3f())).negate();
+    Matrix4f v = new Matrix4f().setLookAt(eye, center, temp);
+    return v;
+  }
+
+  private void loadModel(Model model, int binding) throws IOException {
+    Path path = null;
+    URL resource = Window.class.getResource("/models/" + model.modelFile + ".plyzip");
+    if (resource != null) {
+      try {
+        path = Paths.get(resource.toURI());
+      } catch (URISyntaxException e) {
+        // silently ignore
+      }
+    }
+    if (path == null) { // search in the parent directory (useful for jar files)
+      try {
+        Path jarPath = Paths.get(Window.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+        if (Files.isRegularFile(jarPath)) {
+          path = jarPath.getParent().resolve("models" + ".plyzip").resolve(model.modelFile);
+        }
+      } catch (URISyntaxException e) {
+        // silently ignore
+      }
+    }
+    if (path == null) {
+      throw new IOException("Model " + model + " not found.");
+    }
+
+    float[] vertices = new float[0]; // calm the ide down
+    float[] elements = new float[0];
+    int verticesCurrent = 0;
+    int elementsCurrent = 0;
+
+    ZipInputStream is = new ZipInputStream(Files.newInputStream(path));
+    is.getNextEntry();
+    try (BufferedReader reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
+      while (true) {
+        String line = reader.readLine();
+        if (line == null) {
+          break;
+        }
+        String[] components = line.split("\\s+");
+        switch (components[0]) {
+          case "element":
+            if (components[1].equals("vertex")) {
+              vertices = new float[Integer.parseUnsignedInt(components[2]) * 9];
+            } else if (components[1].equals("face")) {
+              elements = new float[Integer.parseUnsignedInt(components[2]) * 3 * 9];
+            }
+            break;
+          case "3":
+            for (int i = 1; i <= 3; i++) {
+              int vertex = Integer.parseUnsignedInt(components[i]);
+              System.arraycopy(vertices, vertex * 9, elements, elementsCurrent, 9);
+              elementsCurrent += 9;
+            }
+            break;
+          default:
+            try {
+              Float.parseFloat(components[0]);
+            } catch (NumberFormatException e) {
+              break;
+            }
+            for (int i = 0; i < 6; i++) {
+              vertices[verticesCurrent++] = Float.parseFloat(components[i]);
+            }
+            for (int i = 6; i < 9; i++) {
+              vertices[verticesCurrent++] = Integer.parseUnsignedInt(components[i]) / 256.0f;
+            }
+            break;
+        }
+      }
+    }
+    int buffer = glCreateBuffers();
+    FloatBuffer fb = BufferUtils.createFloatBuffer(elements.length);
+    fb.put(elements);
+    fb.flip();
+    glNamedBufferStorage(buffer, fb, 0);
+    glVertexArrayVertexBuffer(vao, binding, buffer, 0, Float.BYTES * 9);
+    meshes.put(model, new Mesh(buffer, binding, elements.length / 9));
   }
 
   private static String readFile(String name) {

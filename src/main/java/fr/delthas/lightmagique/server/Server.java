@@ -42,8 +42,19 @@ public class Server {
   private int clientThatSentExit = -1;
 
   public static void main(String... args) {
+    int port = Properties.DEFAULT_PORT;
+    if (args.length > 1) {
+      System.out.println("Arguments not recognized. Usage: [port] (port has to be an integer).");
+    } else if (args.length == 1) {
+      try {
+        port = Integer.parseUnsignedInt(args[0]);
+      } catch (NumberFormatException e) {
+        System.out.println("Argument not recognized. Usage: [port] (port has to be an integer).");
+      }
+    }
+    System.out.println("Starting on port: " + port);
     try {
-      new Server().start();
+      new Server().start(port);
     } catch (Exception e) {
       System.err.println("An exception has occured. This stack trace has been copied to your clipboard.");
       e.printStackTrace(System.err);
@@ -58,7 +69,7 @@ public class Server {
     }
   }
 
-  private void start() throws IOException {
+  private void start(int port) throws IOException {
     for (int i = 0; i < Properties.PLAYER_COUNT; i++) {
       types[i] = ByteBuffer.allocateDirect(1);
       buffers[i] = ByteBuffer.allocateDirect(Properties.ENTITY_MESSAGE_LENGTH);
@@ -73,7 +84,7 @@ public class Server {
 
     try (ServerSocketChannel serverSocketChannel = ServerSocketChannel.open()) {
       serverSocketChannel.configureBlocking(true);
-      serverSocketChannel.bind(new InetSocketAddress(Properties.SERVER_PORT));
+      serverSocketChannel.bind(new InetSocketAddress(port));
       for (int i = 0; i < Properties.PLAYER_COUNT; i++) {
         channels[i] = serverSocketChannel.accept();
         channels[i].setOption(StandardSocketOptions.TCP_NODELAY, Boolean.TRUE);

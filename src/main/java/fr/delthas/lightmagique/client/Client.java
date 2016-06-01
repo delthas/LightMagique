@@ -8,20 +8,25 @@ import java.awt.datatransfer.StringSelection;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.StandardSocketOptions;
+import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.nio.channels.GatheringByteChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.channels.WritableByteChannel;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
+import fr.delthas.lightmagique.client.Window.Model;
 import fr.delthas.lightmagique.shared.Entity;
-import fr.delthas.lightmagique.shared.Map;
 import fr.delthas.lightmagique.shared.Properties;
 import fr.delthas.lightmagique.shared.Shooter;
 import fr.delthas.lightmagique.shared.State;
+import fr.delthas.lightmagique.shared.Terrain;
 import fr.delthas.lightmagique.shared.Triplet;
 
 public class Client {
@@ -66,9 +71,9 @@ public class Client {
   }
 
   public static final String GAME_NAME = "LightMagique";
-  private static final String SERVER_ADDRESS = "82.231.158.103";
+  private static final String DEFAULT_ADDRESS = "82.231.158.103";
   private State state = new State();
-  private Window window = new Window();
+  private Window window;
   private SocketChannel channel;
   private int screenWidth, screenHeight;
   private ByteBuffer rType;
@@ -98,8 +103,49 @@ public class Client {
   private Font waveFont = Font.decode("Verdana").deriveFont(30.0f);
 
   public static void main(String[] args) {
+    InetAddress address = null;
     try {
-      new Client().start();
+      address = InetAddress.getByName(DEFAULT_ADDRESS);
+    } catch (UnknownHostException e) {
+      // silently ignore (will be caught below)
+    }
+    int port = Properties.DEFAULT_PORT;
+
+    String usageString = "Arguments not recognized. Usage: [adress:[port]] (address has to be a hostname or IP address, and 1<=port<=65535).";
+    if (args.length > 1) {
+      System.out.println(usageString);
+    } else if (args.length == 1) {
+      Pattern patternAddress = Pattern.compile("([0-9a-zA-Z\\.]+)(?:\\:([0-9]+)?)");
+      Matcher matcher = patternAddress.matcher(args[0]);
+      if (matcher.matches()) {
+        try {
+          address = InetAddress.getByName(matcher.group(1));
+        } catch (UnknownHostException e) {
+          System.out.println("IP address not recognized or hostname not reachable.");
+        }
+        String portString = matcher.group(2);
+        if (portString != null) {
+          try {
+            port = Integer.parseUnsignedInt(portString);
+            if (port <= 0 || port >= 65536) {
+              throw new NumberFormatException("Port in wrong range");
+            }
+          } catch (NumberFormatException e) {
+            System.out.println(usageString);
+          }
+        }
+      } else {
+        System.out.println(usageString);
+      }
+    }
+    try {
+      if (address == null) {
+        throw new IOException("No valid IP or hostname found in the default or in the eventually passed arguments. "
+            + "Try checking your connection if you're connecting to a remote server.");
+      }
+      InetSocketAddress socketAddress = new InetSocketAddress(address, port);
+      System.out.println("Starting client on address: " + address.toString() + " port:" + port);
+      new Client().start(socketAddress);
     } catch (Exception e) {
       System.err.println("An exception has occured. This stack trace has been copied to your clipboard.");
       e.printStackTrace(System.err);
@@ -114,7 +160,7 @@ public class Client {
     }
   }
 
-  private void start() throws IOException {
+  private void start(InetSocketAddress serverAddress) throws IOException {
     rType = ByteBuffer.allocateDirect(1);
     rBuffer = ByteBuffer.allocateDirect(Properties.ENTITY_MESSAGE_LENGTH);
     rBuffer2 = ByteBuffer.allocateDirect(Properties.SHOOTER_MESSAGE_LENGTH);
@@ -126,7 +172,7 @@ public class Client {
     oneByteBuffer = ByteBuffer.allocateDirect(1);
     initFrame();
 
-    try (SocketChannel channel = SocketChannel.open(new InetSocketAddress(SERVER_ADDRESS, Properties.SERVER_PORT))) {
+    try (SocketChannel channel = SocketChannel.open(serverAddress)) {
       this.channel = channel;
       channel.setOption(StandardSocketOptions.TCP_NODELAY, Boolean.TRUE);
       channel.configureBlocking(true);
@@ -366,56 +412,76 @@ public class Client {
     window.exit();
   }
 
-  private void render(@SuppressWarnings("unused") float alpha) {
-    window.beginRender();
+  private void render(float alpha) {
 
     Point.Double mousePosition = window.getMouse();
     Shooter player = state.getPlayer(playerId);
 
-    int minX = (int) (player.getX() - screenWidth / 2.0 + (mousePosition.x - screenWidth / 2.0) * lookAroundFactor);
-    int minY = (int) (player.getY() - screenHeight / 2.0 + (mousePosition.y - screenHeight / 2.0) * lookAroundFactor);
-    int maxX = minX + screenWidth - 1;
-    int maxY = minY + screenHeight - 1;
+    float minX = (float) (player.getX() - screenWidth / 2.0 + (mousePosition.x - screenWidth / 2.0) * lookAroundFactor);
+    float minY = (float) (player.getY() - screenHeight / 2.0 + (mousePosition.y - screenHeight / 2.0) * lookAroundFactor);
+    float maxX = minX + screenWidth - 1;
+    float maxY = minY + screenHeight - 1;
 
-    window.renderImage(minX, minY);
+    window.beginRender(minX + screenWidth / 2, minY + screenHeight / 2);
 
     Consumer<Entity> draw = (entity) -> {
       if (entity.isDestroyed()) {
         return;
       }
-      if (entity.getX() < minX - 50 || entity.getX() > maxX + 50 || entity.getY() < minY - 50 || entity.getY() > maxY + 50) {
+      if (entity.getX() < minX - 500 || entity.getX() > maxX + 500 || entity.getY() < minY - 500 || entity.getY() > maxY + 500) {
         return;
       }
-      float screenX = (float) (entity.getX() - minX);
-      float screenY = (float) (entity.getY() - minY);
       float angle = (float) entity.getAngle();
       float scale;
+      float x = (float) entity.getX();
+      float y = (float) entity.getY();
+      float nx;
+      float ny;
+      if (entity.isMoving()) {
+        nx = (float) (entity.getSpeed() * alpha * Math.cos(angle) + x);
+        ny = (float) (entity.getSpeed() * alpha * Math.sin(angle) + y);
+      } else {
+        nx = x;
+        ny = y;
+      }
+      Terrain terrain = state.getMap().getTerrain((int) nx, (int) ny);
       Color color;
 
       if (entity instanceof Shooter) {
+        if (terrain.playerThrough) {
+          x = nx;
+          y = ny;
+        }
         float healthPercent = ((Shooter) entity).getHealthPercent();
         if (entity.isEnemy()) { // enemy
-          scale = 20;
-          color = new Color(0.5f - 0.5f * healthPercent, 0.5f + 0.5f * healthPercent, 0.5f - 0.5f * healthPercent);
-          window.renderTriangle(screenX, screenY, angle, scale, color);
+          scale = 100;
+          color = new Color(0.5f - 0.4f * healthPercent, 0.5f - 0.15f * healthPercent, 0.5f - 0.4f * healthPercent);
+          window.renderLight(new Light(color, x, y));
+          window.renderEntity(new RenderEntity(Model.MONSTER, x, y, angle, scale));
         } else { // player
           if (((Shooter) entity).isFrozen()) {
             color = new Color(0, 0, 0.5f + 0.5f * healthPercent);
           } else {
-            color = new Color(0.5f + 0.5f * healthPercent, 0.5f - 0.5f * healthPercent, 0.5f - 0.5f * healthPercent);
+            color = new Color(0.5f - 0.15f * healthPercent, 0.5f - 0.4f * healthPercent, 0.5f - 0.4f * healthPercent);
           }
-          scale = 20;
-          window.renderTriangle(screenX, screenY, angle, scale, color);
+          scale = 100;
+          window.renderLight(new Light(color, x, y));
+          window.renderEntity(new RenderEntity(Model.PLAYER, x, y, angle, scale));
         }
       } else {
+        if (terrain.ballThrough) {
+          x = nx;
+          y = ny;
+        }
         float damagePercent = entity.getHealth() / (float) Shooter.getMaxDamage();
         if (entity.isEnemy()) {
-          color = Color.getHSBColor(damagePercent, 0.5f, 0.5f);
+          color = Color.getHSBColor(damagePercent, 0.3f, 0.5f);
         } else {
-          color = Color.getHSBColor(damagePercent, 1, 1);
+          color = Color.getHSBColor(damagePercent, 0.5f, 0.6f);
         }
-        scale = entity.getHitbox() / 100f;
-        window.renderCircle(screenX, screenY, angle, scale, color);
+        scale = 10 * entity.getHitbox() / 100f;
+        window.renderLight(new Light(color, x, y));
+        window.renderEntity(new RenderEntity(Model.BALL, x, y, angle, scale));
       }
     };
 
@@ -476,12 +542,11 @@ public class Client {
     window.endRender();
   }
 
-  private void initFrame() {
+  private void initFrame() throws IOException {
+    window = new Window(state.getMap().getMapImage());
     window.start();
     screenWidth = window.getWidth();
     screenHeight = window.getHeight();
-    Map map = state.getMap();
-    window.setBackground(map.getMapImage());
   }
 
   private static void write(WritableByteChannel channel, ByteBuffer buf) throws IOException {

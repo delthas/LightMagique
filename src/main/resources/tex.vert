@@ -1,7 +1,15 @@
 # version 450 core
 
-in vec2 pos;
+layout(std140) uniform;
 
-void main() {
-  gl_Position = vec4(pos, 0.0, 1.0);
+layout(location = 0) in vec2 position;
+
+out vec2 imagePosition;
+
+uniform mat4 texMatrix;
+
+void main()
+{
+  gl_Position = texMatrix * vec4(position, 0.0, 1.0);
+  imagePosition = position;
 }
