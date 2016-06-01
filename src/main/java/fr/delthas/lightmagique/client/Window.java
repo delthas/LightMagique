@@ -103,8 +103,12 @@ import static org.lwjgl.system.MemoryUtil.NULL;
 
 import java.awt.Color;
 import java.awt.image.BufferedImage;
+import java.awt.image.ColorModel;
+import java.awt.image.DataBuffer;
+import java.awt.image.DataBufferByte;
+import java.awt.image.DataBufferInt;
+import java.awt.image.Raster;
 import java.io.BufferedReader;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URISyntaxException;
@@ -113,17 +117,14 @@ import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
-import java.util.zip.ZipFile;
 import java.util.zip.ZipInputStream;
 
 import org.joml.Matrix3f;
@@ -162,7 +163,7 @@ import org.lwjgl.opengl.GL;
 class Window {
 
   public enum Model {
-    PLAYER("player"), MONSTER("player"), BALL("player");
+    PLAYER("player"), MONSTER("monster"), BALL("ball");
 
     private String modelFile;
 
@@ -215,6 +216,10 @@ class Window {
   private List<RenderEntity> entities;
   private List<Light> lights;
 
+  // Reuse buffers to reduce RAM usage
+  private FloatBuffer bufferMat4x4;
+  private ByteBuffer bufferLights;
+
   public void renderLight(Light light) {
     lights.add(light);
   }
@@ -245,23 +250,25 @@ class Window {
     float maxIntensity = 1.5f;
     float gamma = 2.2f;
 
-    ByteBuffer bb = BufferUtils.createByteBuffer(32 + 48 * maxNumberOfLights);
-    bb.putFloat(ambientColor.getRed() / 256f).putFloat(ambientColor.getGreen() / 256f).putFloat(ambientColor.getBlue() / 256f).putFloat(1.0f);
-    bb.putFloat(1 / (midAttenuationDistance * midAttenuationDistance));
-    bb.putFloat(maxIntensity);
-    bb.putFloat(1 / gamma);
-    bb.putInt(lights.size());
+    bufferLights.clear();
+    bufferLights.putFloat(ambientColor.getRed() / 256f).putFloat(ambientColor.getGreen() / 256f).putFloat(ambientColor.getBlue() / 256f)
+        .putFloat(1.0f);
+    bufferLights.putFloat(1 / (midAttenuationDistance * midAttenuationDistance));
+    bufferLights.putFloat(maxIntensity);
+    bufferLights.putFloat(1 / gamma);
+    bufferLights.putInt(lights.size());
 
     for (Light light : lights) {
       Vector4f lightCameraPosition = calcLookAt(cameraX, cameraY).transform(new Vector4f(light.x, light.y, 150, 1));
-      bb.putFloat(lightCameraPosition.x).putFloat(lightCameraPosition.y).putFloat(lightCameraPosition.z).putFloat(lightCameraPosition.w);
-      bb.putFloat(light.color.getRed() / 256f).putFloat(light.color.getGreen() / 256f).putFloat(light.color.getBlue() / 256f).putFloat(1.0f);
-      bb.putFloat(light.x).putFloat(light.y);
-      bb.putFloat(0).putFloat(0); // padding
+      bufferLights.putFloat(lightCameraPosition.x).putFloat(lightCameraPosition.y).putFloat(lightCameraPosition.z).putFloat(lightCameraPosition.w);
+      bufferLights.putFloat(light.color.getRed() / 256f).putFloat(light.color.getGreen() / 256f).putFloat(light.color.getBlue() / 256f)
+          .putFloat(1.0f);
+      bufferLights.putFloat(light.x).putFloat(light.y);
+      bufferLights.putFloat(0).putFloat(0); // padding
     }
 
-    bb.flip();
-    glNamedBufferSubData(indexLight, 0, bb);
+    bufferLights.flip();
+    glNamedBufferSubData(indexLight, 0, bufferLights);
 
     // 2. Draw background
 
@@ -274,8 +281,8 @@ class Window {
     glVertexArrayAttribFormat(vao, 0, 2, GL_FLOAT, false, 0);
     glBindBuffer(GL_ARRAY_BUFFER, backgroundBuffer);
     Matrix4f pTex = new Matrix4f().scale(2f / width, 2f / height, 0).translate(-cameraX, -cameraY, 0);
-    FloatBuffer fbTex = BufferUtils.createFloatBuffer(16);
-    glUniformMatrix4fv(indexTexMatrix, false, pTex.get(fbTex));
+    bufferMat4x4.clear();
+    glUniformMatrix4fv(indexTexMatrix, false, pTex.get(bufferMat4x4));
     glDrawArrays(GL_TRIANGLES, 0, 6);
     glVertexArrayAttribFormat(vao, 0, 3, GL_FLOAT, false, 0);
     glVertexArrayAttribFormat(vao, 1, 3, GL_FLOAT, false, Float.BYTES * 3);
@@ -289,8 +296,8 @@ class Window {
 
     Matrix4f p = new Matrix4f().setOrthoSymmetric(width, height, 0.1f, 10000);
     Matrix4f v = calcLookAt(cameraX, cameraY);
-    FloatBuffer fb = BufferUtils.createFloatBuffer(16);
-    glUniformMatrix4fv(indexP, false, p.get(fb));
+    bufferMat4x4.clear();
+    glUniformMatrix4fv(indexP, false, p.get(bufferMat4x4));
 
     for (RenderEntity entity : entities) {
       Mesh mesh = meshes.get(entity.model);
@@ -298,9 +305,9 @@ class Window {
           .scale(entity.scale);
       Matrix4f vm = v.mul(m, new Matrix4f());
       Matrix3f vmNormal = new Matrix3f(vm);
-      fb.clear();
-      glUniformMatrix4fv(indexVM, false, vm.get(fb));
-      glUniformMatrix3fv(indexVMNormal, false, (FloatBuffer) vmNormal.get(fb).limit(9));
+      bufferMat4x4.clear();
+      glUniformMatrix4fv(indexVM, false, vm.get(bufferMat4x4));
+      glUniformMatrix3fv(indexVMNormal, false, (FloatBuffer) vmNormal.get(bufferMat4x4).limit(9));
       glVertexArrayAttribBinding(vao, 0, mesh.bindingPoint);
       glVertexArrayAttribBinding(vao, 1, mesh.bindingPoint);
       glVertexArrayAttribBinding(vao, 2, mesh.bindingPoint);
@@ -314,31 +321,26 @@ class Window {
   private void initBuffers() throws IOException {
     glUseProgram(textureProgram);
 
-    int[] pixels = new int[image.getWidth() * image.getHeight()];
-    image.getRGB(0, 0, image.getWidth(), image.getHeight(), pixels, 0, image.getWidth());
+    int imageWidth = image.getWidth();
+    int imageHeight = image.getHeight();
 
-    ByteBuffer buffer = BufferUtils.createByteBuffer(image.getWidth() * image.getHeight() * 3);
+    ByteBuffer imageBuffer = readImage(image);
 
-    for (int y = image.getHeight() - 1; y >= 0; y--) {
-      for (int x = 0; x < image.getWidth(); x++) {
-        int pixel = pixels[y * image.getWidth() + x];
-        buffer.put((byte) (pixel >> 16 & 0xFF)); // Red component
-        buffer.put((byte) (pixel >> 8 & 0xFF)); // Green component
-        buffer.put((byte) (pixel & 0xFF)); // Blue component
-      }
-    }
-    buffer.flip();
+    // we don't need the image anymore
+    // remove the reference *and* call GC
+    image = null;
+    System.gc();
 
     texture = glCreateTextures(GL_TEXTURE_2D);
-    glTextureStorage2D(texture, 1, GL_RGB8, image.getWidth(), image.getHeight());
-    glTextureSubImage2D(texture, 0, 0, 0, image.getWidth(), image.getHeight(), GL_RGB, GL_UNSIGNED_BYTE, buffer);
+    glTextureStorage2D(texture, 1, GL_RGB8, imageWidth, imageHeight);
+    glTextureSubImage2D(texture, 0, 0, 0, imageWidth, imageHeight, GL_RGB, GL_UNSIGNED_BYTE, imageBuffer);
 
-    float[] backgroundPositions =
-        {0, 0, 0, image.getHeight(), image.getWidth(), image.getHeight(), image.getWidth(), image.getHeight(), image.getWidth(), 0, 0, 0};
+    float[] backgroundPositions = {0, 0, 0, imageHeight, imageWidth, imageHeight, imageWidth, imageHeight, imageWidth, 0, 0, 0};
     backgroundBuffer = glCreateBuffers();
     FloatBuffer fb = BufferUtils.createFloatBuffer(backgroundPositions.length);
     fb.put(backgroundPositions);
     fb.flip();
+
     glNamedBufferStorage(backgroundBuffer, fb, 0);
     glVertexArrayVertexBuffer(vao, 0, backgroundBuffer, 0, Float.BYTES * 2);
     glVertexArrayAttribFormat(vao, 0, 2, GL_FLOAT, false, 0);
@@ -347,6 +349,8 @@ class Window {
     for (int i = 0; i < Model.values().length; i++) {
       loadModel(Model.values()[i], i + 1);
     }
+    // clean data allocated when reading models
+    System.gc();
 
     glVertexArrayAttribFormat(vao, 0, 3, GL_FLOAT, false, 0);
     glVertexArrayAttribFormat(vao, 1, 3, GL_FLOAT, false, Float.BYTES * 3);
@@ -358,6 +362,9 @@ class Window {
     indexLight = glCreateBuffers();
     glNamedBufferStorage(indexLight, 32 + maxNumberOfLights * 48, GL_DYNAMIC_STORAGE_BIT);
     glBindBufferBase(GL_UNIFORM_BUFFER, 0, indexLight);
+
+    bufferMat4x4 = BufferUtils.createFloatBuffer(16);
+    bufferLights = BufferUtils.createByteBuffer(32 + 48 * maxNumberOfLights);
   }
 
   private void initUniforms() {
@@ -588,6 +595,7 @@ class Window {
     return v;
   }
 
+  @SuppressWarnings("null")
   private void loadModel(Model model, int binding) throws IOException {
     Path path = null;
     URL resource = Window.class.getResource("/models/" + model.modelFile + ".plyzip");
@@ -612,10 +620,12 @@ class Window {
       throw new IOException("Model " + model + " not found.");
     }
 
-    float[] vertices = new float[0]; // calm the ide down
-    float[] elements = new float[0];
+    // optimization: directly add elements to a buffer for opengl instead of storing them to a temporary array
+
+    float[] vertices = null;
+    FloatBuffer buffer = null;
+    int bufferLength = -1;
     int verticesCurrent = 0;
-    int elementsCurrent = 0;
 
     ZipInputStream is = new ZipInputStream(Files.newInputStream(path));
     is.getNextEntry();
@@ -631,14 +641,16 @@ class Window {
             if (components[1].equals("vertex")) {
               vertices = new float[Integer.parseUnsignedInt(components[2]) * 9];
             } else if (components[1].equals("face")) {
-              elements = new float[Integer.parseUnsignedInt(components[2]) * 3 * 9];
+              bufferLength = Integer.parseUnsignedInt(components[2]) * 3 * 9;
+              buffer = BufferUtils.createFloatBuffer(bufferLength);
             }
             break;
           case "3":
             for (int i = 1; i <= 3; i++) {
               int vertex = Integer.parseUnsignedInt(components[i]);
-              System.arraycopy(vertices, vertex * 9, elements, elementsCurrent, 9);
-              elementsCurrent += 9;
+              for (int j = 0; j < 9; j++) {
+                buffer.put(vertices[vertex * 9 + j]);
+              }
             }
             break;
           default:
@@ -657,13 +669,11 @@ class Window {
         }
       }
     }
-    int buffer = glCreateBuffers();
-    FloatBuffer fb = BufferUtils.createFloatBuffer(elements.length);
-    fb.put(elements);
-    fb.flip();
-    glNamedBufferStorage(buffer, fb, 0);
-    glVertexArrayVertexBuffer(vao, binding, buffer, 0, Float.BYTES * 9);
-    meshes.put(model, new Mesh(buffer, binding, elements.length / 9));
+    buffer.flip();
+    int indexBuffer = glCreateBuffers();
+    glNamedBufferStorage(indexBuffer, buffer, 0);
+    glVertexArrayVertexBuffer(vao, binding, indexBuffer, 0, Float.BYTES * 9);
+    meshes.put(model, new Mesh(indexBuffer, binding, bufferLength / 9));
   }
 
   private static String readFile(String name) {
@@ -677,6 +687,52 @@ class Window {
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
+  }
+
+  private static ByteBuffer readImage(BufferedImage image) {
+    // extract the pixel colors from the image and put it in a buffer for opengl
+    // heavy optimization to avoid allocating 3 times the size of an image
+    // based on BufferedImage#getRGB
+
+    int imageHeight = image.getHeight();
+    int imageWidth = image.getWidth();
+    ByteBuffer buffer = BufferUtils.createByteBuffer(imageWidth * imageHeight * 3);
+    Raster raster = image.getRaster();
+    int nbands = raster.getNumBands();
+    int dataType = raster.getDataBuffer().getDataType();
+    Object data;
+    ColorModel colorModel = image.getColorModel();
+    switch (dataType) {
+      case DataBuffer.TYPE_BYTE:
+        data = new byte[nbands];
+        break;
+      case DataBuffer.TYPE_USHORT:
+        data = new short[nbands];
+        break;
+      case DataBuffer.TYPE_INT:
+        data = new int[nbands];
+        break;
+      case DataBuffer.TYPE_FLOAT:
+        data = new float[nbands];
+        break;
+      case DataBuffer.TYPE_DOUBLE:
+        data = new double[nbands];
+        break;
+      default:
+        throw new IllegalArgumentException("Unknown data buffer type: " + dataType);
+    }
+    for (int y = imageHeight - 1; y >= 0; y--) {
+      for (int x = 0; x < imageWidth; x++) {
+        raster.getDataElements(x, y, data);
+        buffer.put((byte) colorModel.getRed(data));
+        buffer.put((byte) colorModel.getGreen(data));
+        buffer.put((byte) colorModel.getBlue(data));
+      }
+    }
+
+    buffer.flip();
+
+    return buffer;
   }
 
 }

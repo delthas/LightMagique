@@ -59,8 +59,10 @@ public class Map {
     return height;
   }
 
-  public BufferedImage getMapImage() {
-    return mapImage;
+  public BufferedImage getAndForgetMapImage() {
+    BufferedImage temp = mapImage;
+    mapImage = null;
+    return temp;
   }
 
 }

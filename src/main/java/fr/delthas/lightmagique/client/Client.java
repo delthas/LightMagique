@@ -171,7 +171,7 @@ public class Client {
     buffer2 = ByteBuffer.allocateDirect(Properties.SHOOTER_MESSAGE_LENGTH);
     oneByteBuffer = ByteBuffer.allocateDirect(1);
     initFrame();
-
+    System.gc();
     try (SocketChannel channel = SocketChannel.open(serverAddress)) {
       this.channel = channel;
       channel.setOption(StandardSocketOptions.TCP_NODELAY, Boolean.TRUE);
@@ -422,7 +422,7 @@ public class Client {
     float maxX = minX + screenWidth - 1;
     float maxY = minY + screenHeight - 1;
 
-    window.beginRender(minX + screenWidth / 2, minY + screenHeight / 2);
+    window.beginRender(minX + screenWidth / 2f, minY + screenHeight / 2f);
 
     Consumer<Entity> draw = (entity) -> {
       if (entity.isDestroyed()) {
@@ -543,7 +543,7 @@ public class Client {
   }
 
   private void initFrame() throws IOException {
-    window = new Window(state.getMap().getMapImage());
+    window = new Window(state.getMap().getAndForgetMapImage());
     window.start();
     screenWidth = window.getWidth();
     screenHeight = window.getHeight();
