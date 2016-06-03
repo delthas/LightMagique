@@ -12,26 +12,32 @@ import java.nio.channels.GatheringByteChannel;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.channels.WritableByteChannel;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Random;
 
 import fr.delthas.lightmagique.shared.Properties;
 import fr.delthas.lightmagique.shared.Shooter;
 import fr.delthas.lightmagique.shared.State;
 import fr.delthas.lightmagique.shared.Triplet;
+import fr.delthas.lightmagique.shared.Utils;
 
 public class Server {
 
+  private static final String PROPERTIES_FILE = "server.properties";
+  private Properties properties;
   private Random random = new Random();
-  private State state = new State();
+  private State state;
   private boolean stopRequested = false;
-  private SocketChannel[] channels = new SocketChannel[Properties.PLAYER_COUNT];
-  private ByteBuffer[] types = new ByteBuffer[Properties.PLAYER_COUNT];
-  private ByteBuffer[] buffers = new ByteBuffer[Properties.PLAYER_COUNT];
-  private ByteBuffer[] buffers2 = new ByteBuffer[Properties.PLAYER_COUNT];
+  private SocketChannel[] channels;
+  private ByteBuffer[] types;
+  private ByteBuffer[] buffers;
+  private ByteBuffer[] buffers2;
   private ByteBuffer buffer;
   private ByteBuffer buffer2;
   private ByteBuffer changeIdBuffer;
   private ByteBuffer startBuffer;
+  private ByteBuffer propertiesBuffer;
   private ByteBuffer oneByteBuffer;
   private ByteBuffer waveStartBuffer;
   private int sendCount;
@@ -53,8 +59,25 @@ public class Server {
       }
     }
     System.out.println("Starting on port: " + port);
+    Path propertiesPath = Utils.getCurrentFolder().resolve(PROPERTIES_FILE);
+    Properties properties;
+    if (Files.exists(propertiesPath)) {
+      try {
+        properties = new Properties(propertiesPath);
+      } catch (IOException e) {
+        System.out.println("Could not parse the preferences file. Starting with default preferences.");
+        properties = new Properties();
+      }
+    } else {
+      properties = new Properties();
+      try {
+        Properties.writeDefaultProperties(propertiesPath);
+      } catch (IOException e) {
+        System.out.println("Could not write the default properties file to " + propertiesPath.normalize().toString());
+      }
+    }
     try {
-      new Server().start(port);
+      new Server(properties).start(port);
     } catch (Exception e) {
       System.err.println("An exception has occured. This stack trace has been copied to your clipboard.");
       e.printStackTrace(System.err);
@@ -69,8 +92,18 @@ public class Server {
     }
   }
 
+  private Server(Properties properties) {
+    this.properties = properties;
+    channels = new SocketChannel[properties.get(Properties.PLAYER_MAX_)];
+    types = new ByteBuffer[properties.get(Properties.PLAYER_MAX_)];
+    buffers = new ByteBuffer[properties.get(Properties.PLAYER_MAX_)];
+    buffers2 = new ByteBuffer[properties.get(Properties.PLAYER_MAX_)];
+    state = new State(properties);
+    state.getMap().getAndForgetMapImage();
+  }
+
   private void start(int port) throws IOException {
-    for (int i = 0; i < Properties.PLAYER_COUNT; i++) {
+    for (int i = 0; i < properties.get(Properties.PLAYER_MAX_); i++) {
       types[i] = ByteBuffer.allocateDirect(1);
       buffers[i] = ByteBuffer.allocateDirect(Properties.ENTITY_MESSAGE_LENGTH);
       buffers2[i] = ByteBuffer.allocateDirect(Properties.SHOOTER_MESSAGE_LENGTH);
@@ -79,31 +112,35 @@ public class Server {
     buffer2 = ByteBuffer.allocateDirect(Properties.SHOOTER_MESSAGE_LENGTH);
     changeIdBuffer = ByteBuffer.allocateDirect(5);
     startBuffer = ByteBuffer.allocateDirect(2);
+    propertiesBuffer = ByteBuffer.allocateDirect(Properties.PROPERTIES_MESSAGE_LENGTH);
     oneByteBuffer = ByteBuffer.allocateDirect(1);
     waveStartBuffer = ByteBuffer.allocateDirect(5);
 
     try (ServerSocketChannel serverSocketChannel = ServerSocketChannel.open()) {
       serverSocketChannel.configureBlocking(true);
       serverSocketChannel.bind(new InetSocketAddress(port));
-      for (int i = 0; i < Properties.PLAYER_COUNT; i++) {
+      for (int i = 0; i < properties.get(Properties.PLAYER_MAX_); i++) {
         channels[i] = serverSocketChannel.accept();
         channels[i].setOption(StandardSocketOptions.TCP_NODELAY, Boolean.TRUE);
         channels[i].configureBlocking(true);
+        propertiesBuffer.clear();
+        properties.serialize(propertiesBuffer);
+        write(channels[i], propertiesBuffer);
       }
-      for (int i = 0; i < Properties.PLAYER_COUNT; i++) {
+      for (int i = 0; i < properties.get(Properties.PLAYER_MAX_); i++) {
         startBuffer.clear();
         startBuffer.putShort((short) i).flip();
         write(channels[i], startBuffer);
         channels[i].configureBlocking(false);
       }
-      for (int i = 0; i < Properties.PLAYER_COUNT; i++) {
+      for (int i = 0; i < properties.get(Properties.PLAYER_MAX_); i++) {
         Shooter entity = state.getPlayer(i);
         double angle = Math.random() * Math.PI * 2;
         double x = (double) state.getMap().getWidth() / 2;
         double y = (double) state.getMap().getHeight() / 2;
         entity.createPlayer(x, y, angle);
       }
-      for (int i = 0; i < Properties.PLAYER_COUNT; i++) {
+      for (int i = 0; i < properties.get(Properties.PLAYER_MAX_); i++) {
         buffer.clear();
         buffer.put((byte) 0);
         buffer2.clear();
@@ -117,7 +154,7 @@ public class Server {
       state.setPlayerKilledEnemyListener(_void -> {
         oneByteBuffer.clear();
         oneByteBuffer.put((byte) 4).flip();
-        for (int i = 0; i < Properties.PLAYER_COUNT; i++) {
+        for (int i = 0; i < properties.get(Properties.PLAYER_MAX_); i++) {
           write(channels[i], oneByteBuffer);
           oneByteBuffer.rewind();
         }
@@ -125,7 +162,7 @@ public class Server {
       loop();
       oneByteBuffer.clear();
       oneByteBuffer.put((byte) 7).flip();
-      for (int i = 0; i < Properties.PLAYER_COUNT; i++) {
+      for (int i = 0; i < properties.get(Properties.PLAYER_MAX_); i++) {
         if (i == clientThatSentExit) {
           continue;
         }
@@ -141,7 +178,7 @@ public class Server {
         } catch (InterruptedException e) {
           break;
         }
-        for (int j = 0; j < Properties.PLAYER_COUNT; j++) {
+        for (int j = 0; j < properties.get(Properties.PLAYER_MAX_); j++) {
           if (channels[j].isConnected()) {
             continue outer;
           }
@@ -165,7 +202,7 @@ public class Server {
           return;
         }
         logic();
-        if (++sendCount % Properties.STATE_SEND_INTERVAL == 0) {
+        if (++sendCount % properties.get(Properties.STATE_SEND_INTERVAL_) == 0) {
           sendState();
         }
         accumulator -= Properties.TICK_TIME * 1000000;
@@ -183,7 +220,7 @@ public class Server {
   }
 
   private boolean receiveState() throws IOException {
-    outer: for (int i = 0; i < Properties.PLAYER_COUNT; i++) {
+    outer: for (int i = 0; i < properties.get(Properties.PLAYER_MAX_); i++) {
       while (true) {
         if (types[i].position() == 0) { // on sait pas le type du message suivant
           int read = channels[i].read(types[i]);
@@ -212,7 +249,7 @@ public class Server {
             }
             buffers[i].flip();
             int id = buffers[i].getShort(0);
-            if (id >= Properties.ENTITIES_MAX - Properties.ENTITIES_PERSONAL_SPACE_SIZE) {
+            if (id >= properties.get(Properties.ENTITIES_MAX_) - properties.get(Properties.ENTITIES_PERSONAL_SPACE_SIZE_)) {
               int freeId = state.getFreeEntityId(false);
               buffers[i].putShort(0, (short) freeId);
               changeIdBuffer.clear();
@@ -237,14 +274,14 @@ public class Server {
 
   private void logic() {
     if (sendCount % 5 == 0) {
-      for (int i = 0; i < Properties.ENEMIES_MAX; i++) {
+      for (int i = 0; i < properties.get(Properties.ENEMIES_MAX_); i++) {
         Shooter enemy = state.getEnemy(i);
         if (enemy.isDestroyed()) {
           continue;
         }
         Shooter player = state.getPlayer(0);
         double min = State.distanceSq(enemy, player);
-        for (int j = 1; j < Properties.PLAYER_COUNT; j++) {
+        for (int j = 1; j < properties.get(Properties.PLAYER_MAX_); j++) {
           Shooter player2 = state.getPlayer(j);
           double min2 = State.distanceSq(enemy, player2);
           if (min2 < min) {
@@ -284,7 +321,7 @@ public class Server {
       wave++;
       waveStartBuffer.clear();
       waveStartBuffer.put((byte) 5).putInt(wave).flip();
-      for (int i = 0; i < Properties.PLAYER_COUNT; i++) {
+      for (int i = 0; i < properties.get(Properties.PLAYER_MAX_); i++) {
         write(channels[i], waveStartBuffer);
         waveStartBuffer.rewind();
       }
@@ -309,7 +346,7 @@ public class Server {
       ticksUntilNextWave--;
     } else {
       boolean allDestroyed = true;
-      for (int i = 0; i < Properties.ENEMIES_MAX; i++) {
+      for (int i = 0; i < properties.get(Properties.ENEMIES_MAX_); i++) {
         if (!state.getEnemy(i).isDestroyed()) {
           allDestroyed = false;
           break;
@@ -318,7 +355,7 @@ public class Server {
       if (allDestroyed) {
         oneByteBuffer.clear();
         oneByteBuffer.put((byte) 6).flip();
-        for (int i = 0; i < Properties.PLAYER_COUNT; i++) {
+        for (int i = 0; i < properties.get(Properties.PLAYER_MAX_); i++) {
           write(channels[i], oneByteBuffer);
           oneByteBuffer.rewind();
         }
@@ -329,12 +366,12 @@ public class Server {
   }
 
   private void sendState() {
-    for (int i = 0; i < Properties.PLAYER_COUNT; i++) {
+    for (int i = 0; i < properties.get(Properties.PLAYER_MAX_); i++) {
       buffer.clear();
       buffer.put((byte) 0);
       buffer2.clear();
       state.serialize(i, buffer, buffer2, true);
-      for (int j = 0; j < Properties.PLAYER_COUNT; j++) {
+      for (int j = 0; j < properties.get(Properties.PLAYER_MAX_); j++) {
         if (i == j) {
           continue;
         }
@@ -343,7 +380,7 @@ public class Server {
         buffer2.rewind();
       }
     }
-    for (int i = 0; i < Properties.ENEMIES_MAX; i++) {
+    for (int i = 0; i < properties.get(Properties.ENEMIES_MAX_); i++) {
       if (state.getEnemy(i).isDestroyed()) {
         continue;
       }
@@ -355,7 +392,7 @@ public class Server {
     buffer.clear();
     buffer.put((byte) 2);
     state.serialize(id, buffer);
-    for (int i = 0; i < Properties.PLAYER_COUNT; i++) {
+    for (int i = 0; i < properties.get(Properties.PLAYER_MAX_); i++) {
       write(channels[i], buffer);
       buffer.rewind();
     }
@@ -366,7 +403,7 @@ public class Server {
     buffer.put((byte) 1);
     buffer2.clear();
     state.serialize(id, buffer, buffer2, false);
-    for (int i = 0; i < Properties.PLAYER_COUNT; i++) {
+    for (int i = 0; i < properties.get(Properties.PLAYER_MAX_); i++) {
       write(channels[i], buffer, buffer2);
       buffer.rewind();
       buffer2.rewind();

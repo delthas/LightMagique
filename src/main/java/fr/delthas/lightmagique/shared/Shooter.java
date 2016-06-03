@@ -39,9 +39,8 @@ public class Shooter extends Entity {
       return 15 * shooter.levels[CHARGED_BALL_POWER];
     }
 
-    // Warning: update this when updating getChargedBallMaxCharge
     public static int getMaxDamage() {
-      return 15 * Properties.MAX_LEVEL;
+      return 1000;
     }
 
     public static double getChargedBallSlowdown(Shooter shooter) {
@@ -112,14 +111,17 @@ public class Shooter extends Entity {
   private int freezeDuration;
   private int dashDuration;
 
-  public Shooter() {
+  private Properties properties;
+
+  public Shooter(Properties properties) {
+    this.properties = properties;
     for (int i = 0; i < levels.length; i++) {
       levels[i] = LEVEL_DEFAULTS[i];
     }
   }
 
   public void createPlayer(double x, double y, double angle) {
-    super.create(x, y, Balance.getBaseSpeed(this), angle, Properties.PLAYER_HITBOX, Balance.getMaxHealth(this), false);
+    super.create(x, y, Balance.getBaseSpeed(this), angle, properties.get(Properties.PLAYER_HITBOX_), Balance.getMaxHealth(this), false);
     reset();
   }
 
@@ -133,10 +135,10 @@ public class Shooter extends Entity {
         levels[random.nextInt(levels.length)]++;
       }
       for (int i = 0; i < levels.length; i++) {
-        levels[i] = Math.min(levels[i], Properties.MAX_LEVEL);
+        levels[i] = Math.min(levels[i], properties.get(Properties.MAX_LEVEL_));
       }
     }
-    super.create(x, y, Balance.getBaseSpeed(this), angle, Properties.ENEMY_HITBOX, Balance.getMaxHealth(this), true);
+    super.create(x, y, Balance.getBaseSpeed(this), angle, properties.get(Properties.ENEMY_HITBOX_), Balance.getMaxHealth(this), true);
     reset();
   }
 
@@ -215,7 +217,7 @@ public class Shooter extends Entity {
       // Faire perdre le cooldown même si on lance rien, si on est freeze
       return null;
     }
-    return new Triplet<>(Balance.getBallSpeed(this), Balance.getBallDamage(this), Properties.BALL_HITBOX);
+    return new Triplet<>(Balance.getBallSpeed(this), Balance.getBallDamage(this), properties.get(Properties.BALL_HITBOX_));
   }
 
   /**
@@ -300,8 +302,8 @@ public class Shooter extends Entity {
     } else {
       ballHealth = charge;
     }
-    int ballHitbox =
-        Properties.BALL_HITBOX + (int) Math.min(Balance.getChargedBallHitboxCharge(this) * chargeTicks, Balance.getChargedBallMaxHitbox(this));
+    int ballHitbox = properties.get(Properties.BALL_HITBOX_)
+        + (int) Math.min(Balance.getChargedBallHitboxCharge(this) * chargeTicks, Balance.getChargedBallMaxHitbox(this));
     chargeTicks = -1;
     chargedBallCooldown = Balance.getChargedBallCooldown(this);
     recomputeSpeed();
@@ -341,7 +343,7 @@ public class Shooter extends Entity {
    * @return true si le niveau a bien été monté
    */
   public boolean increaseLevel(int i) {
-    if (levels[i] == Properties.MAX_LEVEL) {
+    if (levels[i] == properties.get(Properties.MAX_LEVEL_)) {
       return false;
     }
     levels[i]++;

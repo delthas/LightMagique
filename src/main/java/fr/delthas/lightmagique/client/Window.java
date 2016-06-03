@@ -1,105 +1,24 @@
 package fr.delthas.lightmagique.client;
 
-import static org.lwjgl.glfw.GLFW.GLFW_BLUE_BITS;
-import static org.lwjgl.glfw.GLFW.GLFW_CONTEXT_VERSION_MAJOR;
-import static org.lwjgl.glfw.GLFW.GLFW_CONTEXT_VERSION_MINOR;
-import static org.lwjgl.glfw.GLFW.GLFW_FALSE;
-import static org.lwjgl.glfw.GLFW.GLFW_GREEN_BITS;
-import static org.lwjgl.glfw.GLFW.GLFW_OPENGL_CORE_PROFILE;
-import static org.lwjgl.glfw.GLFW.GLFW_OPENGL_FORWARD_COMPAT;
-import static org.lwjgl.glfw.GLFW.GLFW_OPENGL_PROFILE;
-import static org.lwjgl.glfw.GLFW.GLFW_PRESS;
-import static org.lwjgl.glfw.GLFW.GLFW_RED_BITS;
-import static org.lwjgl.glfw.GLFW.GLFW_REFRESH_RATE;
-import static org.lwjgl.glfw.GLFW.GLFW_RELEASE;
-import static org.lwjgl.glfw.GLFW.GLFW_RESIZABLE;
-import static org.lwjgl.glfw.GLFW.GLFW_VISIBLE;
-import static org.lwjgl.glfw.GLFW.glfwCreateWindow;
-import static org.lwjgl.glfw.GLFW.glfwGetPrimaryMonitor;
-import static org.lwjgl.glfw.GLFW.glfwGetVideoMode;
-import static org.lwjgl.glfw.GLFW.glfwInit;
-import static org.lwjgl.glfw.GLFW.glfwMakeContextCurrent;
-import static org.lwjgl.glfw.GLFW.glfwPollEvents;
-import static org.lwjgl.glfw.GLFW.glfwSetCursorPosCallback;
-import static org.lwjgl.glfw.GLFW.glfwSetKeyCallback;
-import static org.lwjgl.glfw.GLFW.glfwSetMouseButtonCallback;
-import static org.lwjgl.glfw.GLFW.glfwShowWindow;
-import static org.lwjgl.glfw.GLFW.glfwSwapBuffers;
-import static org.lwjgl.glfw.GLFW.glfwSwapInterval;
-import static org.lwjgl.glfw.GLFW.glfwTerminate;
-import static org.lwjgl.glfw.GLFW.glfwWindowHint;
-import static org.lwjgl.glfw.GLFW.glfwWindowShouldClose;
-import static org.lwjgl.opengl.GL11.GL_BACK;
-import static org.lwjgl.opengl.GL11.GL_CCW;
-import static org.lwjgl.opengl.GL11.GL_COLOR_BUFFER_BIT;
-import static org.lwjgl.opengl.GL11.GL_CULL_FACE;
-import static org.lwjgl.opengl.GL11.GL_DEPTH_BUFFER_BIT;
-import static org.lwjgl.opengl.GL11.GL_DEPTH_TEST;
-import static org.lwjgl.opengl.GL11.GL_FLOAT;
-import static org.lwjgl.opengl.GL11.GL_LEQUAL;
-import static org.lwjgl.opengl.GL11.GL_RGB;
-import static org.lwjgl.opengl.GL11.GL_RGB8;
-import static org.lwjgl.opengl.GL11.GL_TEXTURE_2D;
-import static org.lwjgl.opengl.GL11.GL_TRIANGLES;
-import static org.lwjgl.opengl.GL11.GL_TRUE;
-import static org.lwjgl.opengl.GL11.GL_UNSIGNED_BYTE;
-import static org.lwjgl.opengl.GL11.glBindTexture;
-import static org.lwjgl.opengl.GL11.glClear;
-import static org.lwjgl.opengl.GL11.glClearColor;
-import static org.lwjgl.opengl.GL11.glClearDepth;
-import static org.lwjgl.opengl.GL11.glCullFace;
-import static org.lwjgl.opengl.GL11.glDeleteTextures;
-import static org.lwjgl.opengl.GL11.glDepthFunc;
-import static org.lwjgl.opengl.GL11.glDepthMask;
-import static org.lwjgl.opengl.GL11.glDepthRange;
-import static org.lwjgl.opengl.GL11.glDisable;
-import static org.lwjgl.opengl.GL11.glDrawArrays;
-import static org.lwjgl.opengl.GL11.glEnable;
-import static org.lwjgl.opengl.GL11.glFrontFace;
-import static org.lwjgl.opengl.GL15.GL_ARRAY_BUFFER;
-import static org.lwjgl.opengl.GL15.glBindBuffer;
-import static org.lwjgl.opengl.GL15.glDeleteBuffers;
-import static org.lwjgl.opengl.GL20.GL_COMPILE_STATUS;
-import static org.lwjgl.opengl.GL20.GL_FRAGMENT_SHADER;
-import static org.lwjgl.opengl.GL20.GL_LINK_STATUS;
-import static org.lwjgl.opengl.GL20.GL_VERTEX_SHADER;
-import static org.lwjgl.opengl.GL20.glAttachShader;
-import static org.lwjgl.opengl.GL20.glCompileShader;
-import static org.lwjgl.opengl.GL20.glCreateProgram;
-import static org.lwjgl.opengl.GL20.glCreateShader;
-import static org.lwjgl.opengl.GL20.glDeleteProgram;
-import static org.lwjgl.opengl.GL20.glDeleteShader;
-import static org.lwjgl.opengl.GL20.glDetachShader;
-import static org.lwjgl.opengl.GL20.glGetProgramInfoLog;
-import static org.lwjgl.opengl.GL20.glGetProgrami;
-import static org.lwjgl.opengl.GL20.glGetShaderInfoLog;
-import static org.lwjgl.opengl.GL20.glGetShaderi;
-import static org.lwjgl.opengl.GL20.glGetUniformLocation;
-import static org.lwjgl.opengl.GL20.glLinkProgram;
-import static org.lwjgl.opengl.GL20.glShaderSource;
-import static org.lwjgl.opengl.GL20.glUniformMatrix3fv;
-import static org.lwjgl.opengl.GL20.glUniformMatrix4fv;
-import static org.lwjgl.opengl.GL20.glUseProgram;
-import static org.lwjgl.opengl.GL30.glBindBufferBase;
-import static org.lwjgl.opengl.GL30.glBindVertexArray;
-import static org.lwjgl.opengl.GL30.glDeleteVertexArrays;
-import static org.lwjgl.opengl.GL31.GL_UNIFORM_BUFFER;
-import static org.lwjgl.opengl.GL31.glGetUniformBlockIndex;
-import static org.lwjgl.opengl.GL31.glUniformBlockBinding;
-import static org.lwjgl.opengl.GL32.GL_DEPTH_CLAMP;
-import static org.lwjgl.opengl.GL44.GL_DYNAMIC_STORAGE_BIT;
-import static org.lwjgl.opengl.GL45.glCreateBuffers;
-import static org.lwjgl.opengl.GL45.glCreateTextures;
-import static org.lwjgl.opengl.GL45.glCreateVertexArrays;
-import static org.lwjgl.opengl.GL45.glEnableVertexArrayAttrib;
-import static org.lwjgl.opengl.GL45.glNamedBufferStorage;
-import static org.lwjgl.opengl.GL45.glNamedBufferSubData;
-import static org.lwjgl.opengl.GL45.glTextureStorage2D;
-import static org.lwjgl.opengl.GL45.glTextureSubImage2D;
-import static org.lwjgl.opengl.GL45.glVertexArrayAttribBinding;
-import static org.lwjgl.opengl.GL45.glVertexArrayAttribFormat;
-import static org.lwjgl.opengl.GL45.glVertexArrayVertexBuffer;
-import static org.lwjgl.system.MemoryUtil.NULL;
+import static org.lwjgl.glfw.GLFW.*;
+import static org.lwjgl.opengl.GL11.*;
+import static org.lwjgl.opengl.GL12.*;
+import static org.lwjgl.opengl.GL13.*;
+import static org.lwjgl.opengl.GL14.*;
+import static org.lwjgl.opengl.GL15.*;
+import static org.lwjgl.opengl.GL20.*;
+import static org.lwjgl.opengl.GL21.*;
+import static org.lwjgl.opengl.GL30.*;
+import static org.lwjgl.opengl.GL31.*;
+import static org.lwjgl.opengl.GL32.*;
+import static org.lwjgl.opengl.GL33.*;
+import static org.lwjgl.opengl.GL40.*;
+import static org.lwjgl.opengl.GL41.*;
+import static org.lwjgl.opengl.GL42.*;
+import static org.lwjgl.opengl.GL43.*;
+import static org.lwjgl.opengl.GL44.*;
+import static org.lwjgl.opengl.GL45.*;
+import static org.lwjgl.system.MemoryUtil.*;
 
 import java.awt.Color;
 import java.awt.image.BufferedImage;
@@ -139,6 +58,8 @@ import org.lwjgl.glfw.GLFWMouseButtonCallback;
 import org.lwjgl.glfw.GLFWVidMode;
 import org.lwjgl.opengl.GL;
 
+import fr.delthas.lightmagique.shared.Utils;
+
 // import static org.lwjgl.glfw.GLFW.*;
 // import static org.lwjgl.opengl.GL11.*;
 // import static org.lwjgl.opengl.GL12.*;
@@ -158,6 +79,19 @@ import org.lwjgl.opengl.GL;
 // import static org.lwjgl.opengl.GL44.*;
 // import static org.lwjgl.opengl.GL45.*;
 // import static org.lwjgl.system.MemoryUtil.*;
+
+// import static org.lwjgl.opengl.GL44.GL_DYNAMIC_STORAGE_BIT;
+// import static org.lwjgl.opengl.GL45.glCreateBuffers;
+// import static org.lwjgl.opengl.GL45.glCreateTextures;
+// import static org.lwjgl.opengl.GL45.glCreateVertexArrays;
+// import static org.lwjgl.opengl.GL45.glEnableVertexArrayAttrib;
+// import static org.lwjgl.opengl.GL45.glNamedBufferStorage;
+// import static org.lwjgl.opengl.GL45.glNamedBufferSubData;
+// import static org.lwjgl.opengl.GL45.glTextureStorage2D;
+// import static org.lwjgl.opengl.GL45.glTextureSubImage2D;
+// import static org.lwjgl.opengl.GL45.glVertexArrayAttribBinding;
+// import static org.lwjgl.opengl.GL45.glVertexArrayAttribFormat;
+// import static org.lwjgl.opengl.GL45.glVertexArrayVertexBuffer;
 
 @SuppressWarnings({"unused", "static-method"})
 class Window {
@@ -211,7 +145,6 @@ class Window {
 
   private double mouseX, mouseY;
   private int width, height;
-  private BufferedImage image;
 
   private List<RenderEntity> entities;
   private List<Light> lights;
@@ -318,23 +251,16 @@ class Window {
     glfwSwapBuffers(window);
   }
 
-  private void initBuffers() throws IOException {
-    glUseProgram(textureProgram);
-
+  /**
+   * call this once, and before rendering anything
+   */
+  public void setBackground(BufferedImage image) {
     int imageWidth = image.getWidth();
     int imageHeight = image.getHeight();
-
     ByteBuffer imageBuffer = readImage(image);
-
-    // we don't need the image anymore
-    // remove the reference *and* call GC
-    image = null;
-    System.gc();
-
     texture = glCreateTextures(GL_TEXTURE_2D);
     glTextureStorage2D(texture, 1, GL_RGB8, imageWidth, imageHeight);
     glTextureSubImage2D(texture, 0, 0, 0, imageWidth, imageHeight, GL_RGB, GL_UNSIGNED_BYTE, imageBuffer);
-
     float[] backgroundPositions = {0, 0, 0, imageHeight, imageWidth, imageHeight, imageWidth, imageHeight, imageWidth, 0, 0, 0};
     backgroundBuffer = glCreateBuffers();
     FloatBuffer fb = BufferUtils.createFloatBuffer(backgroundPositions.length);
@@ -344,8 +270,9 @@ class Window {
     glNamedBufferStorage(backgroundBuffer, fb, 0);
     glVertexArrayVertexBuffer(vao, 0, backgroundBuffer, 0, Float.BYTES * 2);
     glVertexArrayAttribFormat(vao, 0, 2, GL_FLOAT, false, 0);
-    glUseProgram(program);
+  }
 
+  private void initBuffers() throws IOException {
     for (int i = 0; i < Model.values().length; i++) {
       loadModel(Model.values()[i], i + 1);
     }
@@ -582,10 +509,6 @@ class Window {
     glfwTerminate();
   }
 
-  public Window(BufferedImage image) {
-    this.image = image;
-  }
-
   private static Matrix4f calcLookAt(float x, float y) {
     Vector3f eye = new Vector3f(x, (float) (y - cameraDistance * Math.sin(cameraAngle)), (float) (cameraDistance * Math.cos(cameraAngle)));
     Vector3f center = new Vector3f(x, y, 0);
@@ -597,26 +520,8 @@ class Window {
 
   @SuppressWarnings("null")
   private void loadModel(Model model, int binding) throws IOException {
-    Path path = null;
-    URL resource = Window.class.getResource("/models/" + model.modelFile + ".plyzip");
-    if (resource != null) {
-      try {
-        path = Paths.get(resource.toURI());
-      } catch (URISyntaxException e) {
-        // silently ignore
-      }
-    }
-    if (path == null) { // search in the parent directory (useful for jar files)
-      try {
-        Path jarPath = Paths.get(Window.class.getProtectionDomain().getCodeSource().getLocation().toURI());
-        if (Files.isRegularFile(jarPath)) {
-          path = jarPath.getParent().resolve("models" + ".plyzip").resolve(model.modelFile);
-        }
-      } catch (URISyntaxException e) {
-        // silently ignore
-      }
-    }
-    if (path == null) {
+    Path resourcePath = Utils.getCurrentFolder().resolve("models").resolve(model.modelFile + ".plyzip");
+    if (resourcePath == null) {
       throw new IOException("Model " + model + " not found.");
     }
 
@@ -627,7 +532,7 @@ class Window {
     int bufferLength = -1;
     int verticesCurrent = 0;
 
-    ZipInputStream is = new ZipInputStream(Files.newInputStream(path));
+    ZipInputStream is = new ZipInputStream(Files.newInputStream(resourcePath));
     is.getNextEntry();
     try (BufferedReader reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
       while (true) {

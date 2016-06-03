@@ -71,8 +71,9 @@ public class Client {
   }
 
   public static final String GAME_NAME = "LightMagique";
-  private static final String DEFAULT_ADDRESS = "82.231.158.103";
-  private State state = new State();
+  private static final String DEFAULT_ADDRESS = "localhost";
+  private Properties properties;
+  private State state;
   private Window window;
   private SocketChannel channel;
   private int screenWidth, screenHeight;
@@ -81,6 +82,7 @@ public class Client {
   private ByteBuffer rBuffer2;
   private ByteBuffer rChangeIdBuffer;
   private ByteBuffer rStartBuffer;
+  private ByteBuffer rPropertiesBuffer;
   private ByteBuffer rWaveStartBuffer;
   private ByteBuffer buffer;
   private ByteBuffer buffer2;
@@ -166,6 +168,7 @@ public class Client {
     rBuffer2 = ByteBuffer.allocateDirect(Properties.SHOOTER_MESSAGE_LENGTH);
     rChangeIdBuffer = ByteBuffer.allocateDirect(4);
     rStartBuffer = ByteBuffer.allocateDirect(2);
+    rPropertiesBuffer = ByteBuffer.allocateDirect(Properties.PROPERTIES_MESSAGE_LENGTH);
     rWaveStartBuffer = ByteBuffer.allocateDirect(4);
     buffer = ByteBuffer.allocateDirect(1 + Properties.ENTITY_MESSAGE_LENGTH);
     buffer2 = ByteBuffer.allocateDirect(Properties.SHOOTER_MESSAGE_LENGTH);
@@ -176,6 +179,12 @@ public class Client {
       this.channel = channel;
       channel.setOption(StandardSocketOptions.TCP_NODELAY, Boolean.TRUE);
       channel.configureBlocking(true);
+      channel.read(rPropertiesBuffer);
+      rPropertiesBuffer.flip();
+      properties = new Properties(rPropertiesBuffer);
+      state = new State(properties);
+      window.setBackground(state.getMap().getAndForgetMapImage());
+      System.gc();
       channel.read(rStartBuffer);
       rStartBuffer.flip();
       playerId = rStartBuffer.getShort();
@@ -223,7 +232,7 @@ public class Client {
           return;
         }
         logic();
-        if (++sendCount % Properties.STATE_SEND_INTERVAL == 0) {
+        if (++sendCount % properties.get(Properties.STATE_SEND_INTERVAL_) == 0) {
           sendState();
         }
         accumulator -= Properties.TICK_TIME * 1000000;
@@ -273,7 +282,7 @@ public class Client {
           state.swapEntities(oldId, newId);
           break;
         case 4:
-          xp += Properties.XP_PER_HIT;
+          xp += properties.get(Properties.XP_PER_HIT_);
           break;
         case 5:
           rWaveStartBuffer.clear();
@@ -382,7 +391,7 @@ public class Client {
     }
     if (keyPressed.contains(28)) {
       int currentLevel = player.getLevels()[levelUpPosition];
-      int neededXp = Properties.getNeededXp(currentLevel);
+      int neededXp = Properties.getNeededXpFor(currentLevel + 1);
       if (neededXp <= xp) {
         if (player.increaseLevel(levelUpPosition)) {
           xp -= neededXp;
@@ -485,13 +494,13 @@ public class Client {
       }
     };
 
-    for (int i = 0; i < Properties.ENTITIES_MAX; i++) {
+    for (int i = 0; i < properties.get(Properties.ENTITIES_MAX_); i++) {
       draw.accept(state.getEntity(i));
     }
-    for (int i = 0; i < Properties.ENEMIES_MAX; i++) {
+    for (int i = 0; i < properties.get(Properties.ENEMIES_MAX_); i++) {
       draw.accept(state.getEnemy(i));
     }
-    for (int i = 0; i < Properties.PLAYER_COUNT; i++) {
+    for (int i = 0; i < properties.get(Properties.PLAYER_MAX_); i++) {
       draw.accept(state.getPlayer(i));
     }
 
@@ -533,7 +542,7 @@ public class Client {
     // g.drawString("Xp actuelle : " + xp, 20, 50);
     // for (int i = 0; i < length; i++) {
     // g.drawString(names[i], 20, 100 + 50 * i);
-    // g.drawString("Niveau actuel : " + levels[i] + " ; Xp nécessaire pour upgrade : " + Properties.getNeededXp(levels[i]), 20, 115 + 50 * i);
+    // g.drawString("Niveau actuel : " + levels[i] + " ; Xp nécessaire pour upgrade : " + Properties.getNeededXp(levels[i]+1), 20, 115 + 50 * i);
     // }
     // g.setColor(Color.RED);
     // g.fillRect(5, 100 + 50 * levelUpPosition - 5, 11, 11);
@@ -543,7 +552,7 @@ public class Client {
   }
 
   private void initFrame() throws IOException {
-    window = new Window(state.getMap().getAndForgetMapImage());
+    window = new Window();
     window.start();
     screenWidth = window.getWidth();
     screenHeight = window.getHeight();

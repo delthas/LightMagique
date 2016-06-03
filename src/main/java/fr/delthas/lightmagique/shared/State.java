@@ -7,21 +7,26 @@ import java.util.function.Consumer;
 public class State {
 
   private Map map = new Map();
-  private Shooter[] players = new Shooter[Properties.PLAYER_COUNT];
-  private Entity[] entities = new Entity[Properties.ENTITIES_MAX];
-  private Shooter[] enemies = new Shooter[Properties.ENEMIES_MAX];
+  private Properties properties;
+  private Shooter[] players;
+  private Shooter[] enemies;
+  private Entity[] entities;
 
   private Consumer<Integer> destroyEntityListener = null;
   private Consumer<Integer> destroyEnemyListener = null;
   private Consumer<Void> playerKilledEnemyListener = null;
 
-  public State() {
+  public State(Properties properties) {
+    this.properties = properties;
+    players = new Shooter[properties.get(Properties.PLAYER_MAX_)];
     for (int i = 0; i < players.length; i++) {
-      players[i] = new Shooter();
+      players[i] = new Shooter(properties);
     }
+    enemies = new Shooter[properties.get(Properties.ENEMIES_MAX_)];
     for (int i = 0; i < enemies.length; i++) {
-      enemies[i] = new Shooter();
+      enemies[i] = new Shooter(properties);
     }
+    entities = new Entity[properties.get(Properties.ENTITIES_MAX_)];
     for (int i = 0; i < entities.length; i++) {
       entities[i] = new Entity();
     }
@@ -29,7 +34,7 @@ public class State {
 
   public void logic() {
     moveEntities();
-    for (int i = 0; i < Properties.ENEMIES_MAX; i++) {
+    for (int i = 0; i < properties.get(Properties.ENEMIES_MAX_); i++) {
       Shooter shooter = enemies[i];
       if (shooter.isDestroyed()) {
         continue;
@@ -97,13 +102,13 @@ public class State {
         tryMoveEntity(shooter, false);
       }
     }
-    for (int i = 0; i < Properties.ENTITIES_MAX; i++) {
+    for (int i = 0; i < properties.get(Properties.ENTITIES_MAX_); i++) {
       Entity entity = entities[i];
       if (entity.isDestroyed()) {
         continue;
       }
       if (entity.isMoving()) {
-        if (entity.getHitbox() <= Properties.BALL_HITBOX) {
+        if (entity.getHitbox() <= properties.get(Properties.BALL_HITBOX_)) {
           // do not attempt to move it cleverly
           Pair<Double, Double> pair = tryMoveEntity(entity.getX(), entity.getY(), entity.getSpeed(), entity.getAngle(), false);
           if (pair != null) {
@@ -118,11 +123,6 @@ public class State {
           }
         } else {
           // // attempt to move it cleverly
-          // Optional<Boolean> result = tryMoveEntity(entity, entity.isEnemy());
-          // if (result.isPresent() && result.get()) {
-          // // had to change its direction, punish it by removing some hitbox
-          // entity.setHitbox(entity.getHitbox() - 1);
-          // }
           Pair<Double, Double> pair = tryMoveEntity(entity.getX(), entity.getY(), entity.getSpeed(), entity.getAngle(), false);
           if (pair != null) {
             entity.setX(pair.getFirst());
@@ -167,7 +167,7 @@ public class State {
   }
 
   public int getFreeEnemyId() {
-    for (int i = 0; i < Properties.ENEMIES_MAX; i++) {
+    for (int i = 0; i < properties.get(Properties.ENEMIES_MAX_); i++) {
       if (enemies[i].isDestroyed()) {
         return i;
       }
@@ -177,13 +177,14 @@ public class State {
 
   public int getFreeEntityId(boolean personal) {
     if (personal) {
-      for (int i = Properties.ENTITIES_MAX - Properties.ENTITIES_PERSONAL_SPACE_SIZE; i < Properties.ENTITIES_MAX; i++) {
+      for (int i = properties.get(Properties.ENTITIES_MAX_) - properties.get(Properties.ENTITIES_PERSONAL_SPACE_SIZE_); i < properties
+          .get(Properties.ENTITIES_MAX_); i++) {
         if (entities[i].isDestroyed()) {
           return i;
         }
       }
     } else {
-      for (int i = 0; i < Properties.ENTITIES_MAX - Properties.ENTITIES_PERSONAL_SPACE_SIZE; i++) {
+      for (int i = 0; i < properties.get(Properties.ENTITIES_MAX_) - properties.get(Properties.ENTITIES_PERSONAL_SPACE_SIZE_); i++) {
         if (entities[i].isDestroyed()) {
           return i;
         }
