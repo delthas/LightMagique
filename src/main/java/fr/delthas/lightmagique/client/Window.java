@@ -118,6 +118,7 @@ class Window {
     }
   }
 
+  private boolean compatibility = false;
   private long window;
   private GLFWKeyCallback keyCallback;
   private GLFWCursorPosCallback cursorPosCallback;
@@ -386,23 +387,39 @@ class Window {
 
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
 
     GLFWVidMode vidmode = glfwGetVideoMode(glfwGetPrimaryMonitor());
     glfwWindowHint(GLFW_RED_BITS, vidmode.redBits());
     glfwWindowHint(GLFW_GREEN_BITS, vidmode.greenBits());
     glfwWindowHint(GLFW_BLUE_BITS, vidmode.blueBits());
     glfwWindowHint(GLFW_REFRESH_RATE, vidmode.refreshRate());
-
-    window = glfwCreateWindow(vidmode.width(), vidmode.height(), Client.GAME_NAME, glfwGetPrimaryMonitor(), NULL);
     width = vidmode.width();
     height = vidmode.height();
 
+    // try best mode: 4.5
+
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
+
+    window = glfwCreateWindow(vidmode.width(), vidmode.height(), Client.GAME_NAME, glfwGetPrimaryMonitor(), NULL);
+
     if (window == NULL) {
-      throw new RuntimeException("Failed to create the GLFW window");
+      // try compatibility mode: 3.3
+
+      glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+      glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+
+      window = glfwCreateWindow(vidmode.width(), vidmode.height(), Client.GAME_NAME, glfwGetPrimaryMonitor(), NULL);
+
+      compatibility = true;
+
+      if (window == NULL) {
+        // fail
+
+        throw new RuntimeException("Failed to create the GLFW window. Update your graphics card drivers.");
+      }
     }
 
     glfwSetKeyCallback(window, keyCallback = new GLFWKeyCallback() {
