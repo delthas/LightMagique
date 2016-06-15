@@ -12,32 +12,21 @@ import static org.lwjgl.opengl.GL30.*;
 import static org.lwjgl.opengl.GL31.*;
 import static org.lwjgl.opengl.GL32.*;
 import static org.lwjgl.opengl.GL33.*;
-import static org.lwjgl.opengl.GL40.*;
-import static org.lwjgl.opengl.GL41.*;
-import static org.lwjgl.opengl.GL42.*;
-import static org.lwjgl.opengl.GL43.*;
-import static org.lwjgl.opengl.GL44.*;
-import static org.lwjgl.opengl.GL45.*;
 import static org.lwjgl.system.MemoryUtil.*;
 
 import java.awt.Color;
 import java.awt.image.BufferedImage;
 import java.awt.image.ColorModel;
 import java.awt.image.DataBuffer;
-import java.awt.image.DataBufferByte;
-import java.awt.image.DataBufferInt;
 import java.awt.image.Raster;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.net.URISyntaxException;
-import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashSet;
@@ -72,26 +61,8 @@ import fr.delthas.lightmagique.shared.Utils;
 // import static org.lwjgl.opengl.GL31.*;
 // import static org.lwjgl.opengl.GL32.*;
 // import static org.lwjgl.opengl.GL33.*;
-// import static org.lwjgl.opengl.GL40.*;
-// import static org.lwjgl.opengl.GL41.*;
-// import static org.lwjgl.opengl.GL42.*;
-// import static org.lwjgl.opengl.GL43.*;
-// import static org.lwjgl.opengl.GL44.*;
-// import static org.lwjgl.opengl.GL45.*;
 // import static org.lwjgl.system.MemoryUtil.*;
 
-// import static org.lwjgl.opengl.GL44.GL_DYNAMIC_STORAGE_BIT;
-// import static org.lwjgl.opengl.GL45.glCreateBuffers;
-// import static org.lwjgl.opengl.GL45.glCreateTextures;
-// import static org.lwjgl.opengl.GL45.glCreateVertexArrays;
-// import static org.lwjgl.opengl.GL45.glEnableVertexArrayAttrib;
-// import static org.lwjgl.opengl.GL45.glNamedBufferStorage;
-// import static org.lwjgl.opengl.GL45.glNamedBufferSubData;
-// import static org.lwjgl.opengl.GL45.glTextureStorage2D;
-// import static org.lwjgl.opengl.GL45.glTextureSubImage2D;
-// import static org.lwjgl.opengl.GL45.glVertexArrayAttribBinding;
-// import static org.lwjgl.opengl.GL45.glVertexArrayAttribFormat;
-// import static org.lwjgl.opengl.GL45.glVertexArrayVertexBuffer;
 
 @SuppressWarnings({"unused", "static-method"})
 class Window {
@@ -108,12 +79,10 @@ class Window {
 
   private static class Mesh {
     public final int buffer;
-    public final int bindingPoint;
     public final int vertices;
 
-    public Mesh(int buffer, int bindingPoint, int vertices) {
+    public Mesh(int buffer, int vertices) {
       this.buffer = buffer;
-      this.bindingPoint = bindingPoint;
       this.vertices = vertices;
     }
   }
@@ -124,7 +93,7 @@ class Window {
   private GLFWCursorPosCallback cursorPosCallback;
   private GLFWMouseButtonCallback mouseButtonCallback;
 
-  private int vao;
+  private int backgroundVAO, vao;
   private int indexP, indexVM, indexVMNormal;
   private int indexTexMatrix;
   private int indexLight;
@@ -202,7 +171,10 @@ class Window {
     }
 
     bufferLights.flip();
-    glNamedBufferSubData(indexLight, 0, bufferLights);
+
+    glBindBuffer(GL_ARRAY_BUFFER, indexLight);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, bufferLights);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     // 2. Draw background
 
@@ -210,18 +182,14 @@ class Window {
     glDisable(GL_DEPTH_TEST);
     glDepthMask(false);
     glUseProgram(textureProgram);
+    glBindVertexArray(backgroundVAO);
     glBindTexture(GL_TEXTURE_2D, texture);
-    glVertexArrayAttribBinding(vao, 0, 0);
-    glVertexArrayAttribFormat(vao, 0, 2, GL_FLOAT, false, 0);
-    glBindBuffer(GL_ARRAY_BUFFER, backgroundBuffer);
     Matrix4f pTex = new Matrix4f().scale(2f / width, 2f / height, 0).translate(-cameraX, -cameraY, 0);
     bufferMat4x4.clear();
     glUniformMatrix4fv(indexTexMatrix, false, pTex.get(bufferMat4x4));
     glDrawArrays(GL_TRIANGLES, 0, 6);
-    glVertexArrayAttribFormat(vao, 0, 3, GL_FLOAT, false, 0);
-    glVertexArrayAttribFormat(vao, 1, 3, GL_FLOAT, false, Float.BYTES * 3);
-    glVertexArrayAttribFormat(vao, 2, 3, GL_FLOAT, false, Float.BYTES * 6);
     glUseProgram(program);
+    glBindVertexArray(vao);
     glEnable(GL_CULL_FACE);
     glEnable(GL_DEPTH_TEST);
     glDepthMask(true);
@@ -242,10 +210,11 @@ class Window {
       bufferMat4x4.clear();
       glUniformMatrix4fv(indexVM, false, vm.get(bufferMat4x4));
       glUniformMatrix3fv(indexVMNormal, false, (FloatBuffer) vmNormal.get(bufferMat4x4).limit(9));
-      glVertexArrayAttribBinding(vao, 0, mesh.bindingPoint);
-      glVertexArrayAttribBinding(vao, 1, mesh.bindingPoint);
-      glVertexArrayAttribBinding(vao, 2, mesh.bindingPoint);
+
       glBindBuffer(GL_ARRAY_BUFFER, mesh.buffer);
+      glVertexAttribPointer(0, 3, GL_FLOAT, false, Float.BYTES * 9, 0);
+      glVertexAttribPointer(1, 3, GL_FLOAT, false, Float.BYTES * 9, Float.BYTES * 3);
+      glVertexAttribPointer(2, 3, GL_FLOAT, false, Float.BYTES * 9, Float.BYTES * 6);
       glDrawArrays(GL_TRIANGLES, 0, mesh.vertices);
     }
 
@@ -259,36 +228,42 @@ class Window {
     int imageWidth = image.getWidth();
     int imageHeight = image.getHeight();
     ByteBuffer imageBuffer = readImage(image);
-    texture = glCreateTextures(GL_TEXTURE_2D);
-    glTextureStorage2D(texture, 1, GL_RGB8, imageWidth, imageHeight);
-    glTextureSubImage2D(texture, 0, 0, 0, imageWidth, imageHeight, GL_RGB, GL_UNSIGNED_BYTE, imageBuffer);
+    texture = glGenTextures();
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, imageWidth, imageHeight, 0, GL_RGB, GL_UNSIGNED_BYTE, imageBuffer);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
     float[] backgroundPositions = {0, 0, 0, imageHeight, imageWidth, imageHeight, imageWidth, imageHeight, imageWidth, 0, 0, 0};
-    backgroundBuffer = glCreateBuffers();
+    backgroundBuffer = glGenBuffers();
     FloatBuffer fb = BufferUtils.createFloatBuffer(backgroundPositions.length);
     fb.put(backgroundPositions);
     fb.flip();
 
-    glNamedBufferStorage(backgroundBuffer, fb, 0);
-    glVertexArrayVertexBuffer(vao, 0, backgroundBuffer, 0, Float.BYTES * 2);
-    glVertexArrayAttribFormat(vao, 0, 2, GL_FLOAT, false, 0);
+    glBindVertexArray(backgroundVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, backgroundBuffer);
+    glBufferData(GL_ARRAY_BUFFER, fb, GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 2, GL_FLOAT, false, 0, 0);
+    glEnableVertexAttribArray(0);
+    glBindVertexArray(vao);
+
   }
 
   private void initBuffers() throws IOException {
-    for (int i = 0; i < Model.values().length; i++) {
-      loadModel(Model.values()[i], i + 1);
+    for (Model model : Model.values()) {
+      loadModel(model);
     }
     // clean data allocated when reading models
     System.gc();
 
-    glVertexArrayAttribFormat(vao, 0, 3, GL_FLOAT, false, 0);
-    glVertexArrayAttribFormat(vao, 1, 3, GL_FLOAT, false, Float.BYTES * 3);
-    glVertexArrayAttribFormat(vao, 2, 3, GL_FLOAT, false, Float.BYTES * 6);
-    glEnableVertexArrayAttrib(vao, 0);
-    glEnableVertexArrayAttrib(vao, 1);
-    glEnableVertexArrayAttrib(vao, 2);
+    glEnableVertexAttribArray(0);
+    glEnableVertexAttribArray(1);
+    glEnableVertexAttribArray(2);
 
-    indexLight = glCreateBuffers();
-    glNamedBufferStorage(indexLight, 32 + maxNumberOfLights * 48, GL_DYNAMIC_STORAGE_BIT);
+    indexLight = glGenBuffers();
+    glBindBuffer(GL_ARRAY_BUFFER, indexLight);
+    glBufferData(GL_ARRAY_BUFFER, 32 + maxNumberOfLights * 48, GL_DYNAMIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
     glBindBufferBase(GL_UNIFORM_BUFFER, 0, indexLight);
 
     bufferMat4x4 = BufferUtils.createFloatBuffer(16);
@@ -373,7 +348,9 @@ class Window {
     glClearColor(0, 0, 0, 0);
     glClearDepth(1);
 
-    vao = glCreateVertexArrays();
+    backgroundVAO = glGenVertexArrays();
+
+    vao = glGenVertexArrays();
     glBindVertexArray(vao);
   }
 
@@ -398,28 +375,13 @@ class Window {
     width = vidmode.width();
     height = vidmode.height();
 
-    // try best mode: 4.5
-
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 
     window = glfwCreateWindow(vidmode.width(), vidmode.height(), Client.GAME_NAME, glfwGetPrimaryMonitor(), NULL);
 
     if (window == NULL) {
-      // try compatibility mode: 3.3
-
-      glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-      glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-
-      window = glfwCreateWindow(vidmode.width(), vidmode.height(), Client.GAME_NAME, glfwGetPrimaryMonitor(), NULL);
-
-      compatibility = true;
-
-      if (window == NULL) {
-        // fail
-
-        throw new RuntimeException("Failed to create the GLFW window. Update your graphics card drivers.");
-      }
+      throw new RuntimeException("Failed to create the GLFW window. Update your graphics card drivers.");
     }
 
     glfwSetKeyCallback(window, keyCallback = new GLFWKeyCallback() {
@@ -520,6 +482,7 @@ class Window {
     }
     glDeleteBuffers(indexLight);
     glDeleteTextures(texture);
+    glDeleteVertexArrays(backgroundVAO);
     glDeleteVertexArrays(vao);
     glDeleteProgram(program);
     glDeleteProgram(textureProgram);
@@ -536,7 +499,7 @@ class Window {
   }
 
   @SuppressWarnings("null")
-  private void loadModel(Model model, int binding) throws IOException {
+  private void loadModel(Model model) throws IOException {
     Path resourcePath = Utils.getCurrentFolder().resolve("models").resolve(model.modelFile + ".plyzip");
     if (resourcePath == null) {
       throw new IOException("Model " + model + " not found.");
@@ -592,10 +555,11 @@ class Window {
       }
     }
     buffer.flip();
-    int indexBuffer = glCreateBuffers();
-    glNamedBufferStorage(indexBuffer, buffer, 0);
-    glVertexArrayVertexBuffer(vao, binding, indexBuffer, 0, Float.BYTES * 9);
-    meshes.put(model, new Mesh(indexBuffer, binding, bufferLength / 9));
+    int indexBuffer = glGenBuffers();
+    glBindBuffer(GL_ARRAY_BUFFER, indexBuffer);
+    glBufferData(GL_ARRAY_BUFFER, buffer, GL_STATIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    meshes.put(model, new Mesh(indexBuffer, bufferLength / 9));
   }
 
   private static String readFile(String name) {
