@@ -1,7 +1,6 @@
 package fr.delthas.lightmagique.client;
 
 import java.awt.Color;
-import java.awt.Font;
 import java.awt.Point;
 import java.awt.Toolkit;
 import java.awt.datatransfer.StringSelection;
@@ -10,17 +9,18 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.net.StandardSocketOptions;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
-import java.nio.channels.GatheringByteChannel;
-import java.nio.channels.SocketChannel;
-import java.nio.channels.WritableByteChannel;
+import java.nio.file.InvalidPathException;
+import java.nio.file.Paths;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.lwjgl.glfw.GLFW;
+
+import fr.delthas.lightmagique.client.SoundManager.Sound;
 import fr.delthas.lightmagique.client.Window.Model;
 import fr.delthas.lightmagique.shared.Entity;
 import fr.delthas.lightmagique.shared.Properties;
@@ -28,6 +28,8 @@ import fr.delthas.lightmagique.shared.Shooter;
 import fr.delthas.lightmagique.shared.State;
 import fr.delthas.lightmagique.shared.Terrain;
 import fr.delthas.lightmagique.shared.Triplet;
+import fr.delthas.lightmagique.shared.Utils;
+import fr.delthas.network.ClientConnection;
 
 public class Client {
 
@@ -71,29 +73,22 @@ public class Client {
   }
 
   public static final String GAME_NAME = "LightMagique";
-  private static final String DEFAULT_ADDRESS = "localhost";
+  private static final String DEFAULT_ADDRESS = "192.168.0.11";
+  private static final double lookAroundFactor = 0.2;
   private Properties properties;
   private State state;
   private Window window;
-  private SocketChannel channel;
+  private SoundManager soundManager;
   private int screenWidth, screenHeight;
-  private ByteBuffer rType;
-  private ByteBuffer rBuffer;
-  private ByteBuffer rBuffer2;
-  private ByteBuffer rChangeIdBuffer;
-  private ByteBuffer rStartBuffer;
-  private ByteBuffer rPropertiesBuffer;
-  private ByteBuffer rWaveStartBuffer;
-  private ByteBuffer buffer;
-  private ByteBuffer buffer2;
-  private ByteBuffer oneByteBuffer;
-  private static final double lookAroundFactor = 0.2;
+  private ClientConnection clientConnection;
+  private ByteBuffer sendBuffer;
+  private ByteBuffer receiveBuffer;
 
   private int playerId = -1;
   private int sendCount;
 
   private int levelUpPosition = 0;
-  private int xp = 0;
+  private int xp;
 
   private int wave = 0;
   private boolean waveActive = false;
@@ -102,9 +97,8 @@ public class Client {
   private boolean closeWithoutSendingExit = false;
   private boolean exited = false;
 
-  private Font waveFont = Font.decode("Verdana").deriveFont(30.0f);
-
   public static void main(String[] args) {
+    Utils.getFile("cursor.png");
     InetAddress address = null;
     try {
       address = InetAddress.getByName(DEFAULT_ADDRESS);
@@ -113,11 +107,11 @@ public class Client {
     }
     int port = Properties.DEFAULT_PORT;
 
-    String usageString = "Arguments not recognized. Usage: [adress:[port]] (address has to be a hostname or IP address, and 1<=port<=65535).";
+    String usageString = "Arguments not recognized. Usage: [address:[port]] (address has to be a hostname or IP address, and 1<=port<=65535).";
     if (args.length > 1) {
       System.out.println(usageString);
     } else if (args.length == 1) {
-      Pattern patternAddress = Pattern.compile("([0-9a-zA-Z\\.]+)(?:\\:([0-9]+)?)");
+      Pattern patternAddress = Pattern.compile("([0-9a-zA-Z\\.]+)(?:\\:([0-9]+))?");
       Matcher matcher = patternAddress.matcher(args[0]);
       if (matcher.matches()) {
         try {
@@ -137,7 +131,12 @@ public class Client {
           }
         }
       } else {
-        System.out.println(usageString);
+        // if we get a path, ignore it
+        try {
+          Paths.get(args[0]);
+        } catch (InvalidPathException e) {
+          System.out.println(usageString);
+        }
       }
     }
     try {
@@ -145,9 +144,9 @@ public class Client {
         throw new IOException("No valid IP or hostname found in the default or in the eventually passed arguments. "
             + "Try checking your connection if you're connecting to a remote server.");
       }
-      InetSocketAddress socketAddress = new InetSocketAddress(address, port);
+      InetSocketAddress socket = new InetSocketAddress(address, port);
       System.out.println("Starting client on address: " + address.toString() + " port:" + port);
-      new Client().start(socketAddress);
+      new Client().start(socket);
     } catch (Exception e) {
       System.err.println("An exception has occured. This stack trace has been copied to your clipboard.");
       e.printStackTrace(System.err);
@@ -162,58 +161,52 @@ public class Client {
     }
   }
 
-  private void start(InetSocketAddress serverAddress) throws IOException {
-    rType = ByteBuffer.allocateDirect(1);
-    rBuffer = ByteBuffer.allocateDirect(Properties.ENTITY_MESSAGE_LENGTH);
-    rBuffer2 = ByteBuffer.allocateDirect(Properties.SHOOTER_MESSAGE_LENGTH);
-    rChangeIdBuffer = ByteBuffer.allocateDirect(4);
-    rStartBuffer = ByteBuffer.allocateDirect(2);
-    rPropertiesBuffer = ByteBuffer.allocateDirect(Properties.PROPERTIES_MESSAGE_LENGTH);
-    rWaveStartBuffer = ByteBuffer.allocateDirect(4);
-    buffer = ByteBuffer.allocateDirect(1 + Properties.ENTITY_MESSAGE_LENGTH);
-    buffer2 = ByteBuffer.allocateDirect(Properties.SHOOTER_MESSAGE_LENGTH);
-    oneByteBuffer = ByteBuffer.allocateDirect(1);
-    initFrame();
+  private void start(InetSocketAddress socket) throws IOException {
+    window = new Window();
+    screenWidth = window.getWidth();
+    screenHeight = window.getHeight();
+    soundManager = new SoundManager();
+    clientConnection = new ClientConnection(Properties.PROTOCOL_ID, Properties.TIMEOUT, Properties.PACKET_MAX_SIZE);
+    sendBuffer = clientConnection.getSendBuffer();
+    receiveBuffer = clientConnection.getReceiveBuffer();
+    state = new State(receiveBuffer, sendBuffer);
+    soundManager.start();
+    window.start(state.getMap().getAndForgetMapImage());
     System.gc();
-    try (SocketChannel channel = SocketChannel.open(serverAddress)) {
-      this.channel = channel;
-      channel.setOption(StandardSocketOptions.TCP_NODELAY, Boolean.TRUE);
-      channel.configureBlocking(true);
-      channel.read(rPropertiesBuffer);
-      rPropertiesBuffer.flip();
-      properties = new Properties(rPropertiesBuffer);
-      state = new State(properties);
-      window.setBackground(state.getMap().getAndForgetMapImage());
-      System.gc();
-      channel.read(rStartBuffer);
-      rStartBuffer.flip();
-      playerId = rStartBuffer.getShort();
-      state.getPlayer(playerId).createPlayer(0, 0, 0); // init player to sane values
-      channel.configureBlocking(false);
-      loop();
-      exit();
-
-      if (!closeWithoutSendingExit) {
-        oneByteBuffer.clear();
-        oneByteBuffer.put((byte) 7).flip();
-        write(channel, oneByteBuffer);
-
-        // need to do a clumsy poll here b/c the channel is non blocking
-        // wait for server to exit (5 seconds at most)
-        for (int i = 0; i < 50; i++) {
-          try {
-            Thread.sleep(100);
-          } catch (InterruptedException e) {
-            break;
+    clientConnection.start(socket);
+    sendBuffer.put((byte) 0);
+    clientConnection.sendPacket();
+    boolean propertiesReceived = false;
+    boolean startReceived = false;
+    while (!startReceived || !propertiesReceived) {
+      clientConnection.receivePacket(true);
+      switch (receiveBuffer.get()) {
+        case (byte) 14:
+          if (!propertiesReceived) {
+            properties = new Properties(receiveBuffer);
+            state.initialize(properties);
+            Shooter.initialize(properties);
+            propertiesReceived = true;
           }
-          if (!channel.isConnected()) {
-            break;
+          break;
+        case (byte) 15:
+          if (!startReceived) {
+            playerId = receiveBuffer.getShort();
+            startReceived = true;
           }
-        }
+          break;
+        default:
       }
-    } finally {
-      exit();
     }
+    state.getPlayer(playerId).createPlayer(0, 0, 0); // init player to sane values
+    xp = properties.get(Properties.START_XP_);
+    loop();
+
+    if (!closeWithoutSendingExit) {
+      sendBuffer.put((byte) 7);
+      clientConnection.sendPacket();
+    }
+    exit();
   }
 
   private void loop() throws IOException {
@@ -225,6 +218,9 @@ public class Client {
       lastFrame = newTime;
       accumulator += deltaTime;
       while (accumulator >= Properties.TICK_TIME * 1000000) {
+        if (clientConnection.update(deltaTime / 1000000000f)) {
+          return;
+        }
         if (receiveState()) {
           return;
         }
@@ -244,65 +240,77 @@ public class Client {
 
   private boolean receiveState() throws IOException {
     while (true) {
-      if (rType.position() == 0) { // on sait pas le type du message suivant
-        int read = channel.read(rType);
-        if (read == 0) {
-          break;
-        }
+      if (!clientConnection.receivePacket()) {
+        break;
       }
-      int type = rType.get(0);
+      int type = receiveBuffer.get();
       switch (type) {
         case 0:
         case 1:
-          rBuffer.clear();
-          rBuffer2.clear();
-          channel.read(new ByteBuffer[] {rBuffer, rBuffer2});
-          if (rBuffer2.hasRemaining()) {
-            return false;
+          while (receiveBuffer.hasRemaining()) {
+            state.update(type == 0);
           }
-          rBuffer.flip();
-          rBuffer2.flip();
-          state.update(rBuffer, rBuffer2, type == 0);
           break;
         case 2:
-          rBuffer.clear();
-          channel.read(rBuffer);
-          if (rBuffer.hasRemaining()) {
-            return false;
+          while (receiveBuffer.hasRemaining()) {
+            state.update();
           }
-          rBuffer.flip();
-          state.update(rBuffer);
           break;
         case 3:
-          rChangeIdBuffer.clear();
-          channel.read(rChangeIdBuffer);
-          rChangeIdBuffer.flip();
-          int oldId = rChangeIdBuffer.getShort();
-          int newId = rChangeIdBuffer.getShort();
-          state.swapEntities(oldId, newId);
+          state.swapEntities(receiveBuffer.getShort(), receiveBuffer.getShort());
           break;
         case 4:
           xp += properties.get(Properties.XP_PER_HIT_);
+          state.getPlayer(playerId)
+              .increaseHealth((int) (0.07 * state.getPlayer(playerId).getHealth() / state.getPlayer(playerId).getHealthPercent()));
           break;
         case 5:
-          rWaveStartBuffer.clear();
-          channel.read(rWaveStartBuffer);
-          rWaveStartBuffer.flip();
           waveActive = true;
-          wave = rWaveStartBuffer.getInt();
+          wave = receiveBuffer.getShort();
           changeWaveStateTime = System.nanoTime();
+          state.getPlayer(playerId)
+              .increaseHealth((int) (0.5 * state.getPlayer(playerId).getHealth() / state.getPlayer(playerId).getHealthPercent()));
           break;
         case 6:
           waveActive = false;
           changeWaveStateTime = System.nanoTime();
+          soundManager.playSound(Sound.SPAWN);
           break;
         case 7:
           closeWithoutSendingExit = true;
           return true;
+        case 8:
+          int player = receiveBuffer.getShort();
+          soundManager.playSound(Sound.BALL_LAUNCH, state.getPlayer(player));
+          break;
+        case 9:
+          int enemy = receiveBuffer.getShort();
+          soundManager.playSound(Sound.BALL_LAUNCH, state.getEnemy(enemy));
+          break;
+        case 10:
+          player = receiveBuffer.getShort();
+          soundManager.playSound(Sound.PLAYER_HURT, state.getPlayer(player));
+          state.getPlayer(player).decreaseHealth(receiveBuffer.getShort());
+          break;
+        case 11:
+          enemy = receiveBuffer.getShort();
+          soundManager.playSound(Sound.ENEMY_HURT, state.getEnemy(enemy));
+          break;
+        case 12:
+          player = receiveBuffer.getShort();
+          soundManager.playSound(Sound.PLAYER_DASH, state.getPlayer(player));
+          break;
+        case 13:
+          enemy = receiveBuffer.getShort();
+          soundManager.playSound(Sound.ENEMY_DASH, state.getEnemy(enemy));
+          break;
+        case 14:
+        case 15:
+          // ignore unused codes
+          break;
         default:
           throw new IOException("Unknown message: type " + type);
       }
-      rType.clear();
     }
     return false;
   }
@@ -314,25 +322,25 @@ public class Client {
   private boolean input() throws IOException {
     window.pollInput();
 
-    if (window.isKeyDown(1)) {
+    if (window.isKeyDown(GLFW.GLFW_KEY_ESCAPE)) {
       return true;
     }
 
     AxisState x;
-    if (window.isKeyDown(30)) {
-      x = window.isKeyDown(32) ? AxisState.ZERO : AxisState.MINUS;
+    if (window.isKeyDown(GLFW.GLFW_KEY_A)) {
+      x = window.isKeyDown(GLFW.GLFW_KEY_D) ? AxisState.ZERO : AxisState.MINUS;
     } else {
-      x = window.isKeyDown(32) ? AxisState.PLUS : AxisState.ZERO;
+      x = window.isKeyDown(GLFW.GLFW_KEY_D) ? AxisState.PLUS : AxisState.ZERO;
     }
     AxisState y;
-    if (window.isKeyDown(17)) {
-      y = window.isKeyDown(31) ? AxisState.ZERO : AxisState.PLUS;
+    if (window.isKeyDown(GLFW.GLFW_KEY_W)) {
+      y = window.isKeyDown(GLFW.GLFW_KEY_S) ? AxisState.ZERO : AxisState.PLUS;
     } else {
-      y = window.isKeyDown(31) ? AxisState.MINUS : AxisState.ZERO;
+      y = window.isKeyDown(GLFW.GLFW_KEY_S) ? AxisState.MINUS : AxisState.ZERO;
     }
     AxisState ball = window.isMouseDown(0) ? AxisState.PLUS : AxisState.ZERO;
     AxisState chargedBall = window.isMouseDown(1) ? AxisState.PLUS : AxisState.ZERO;
-    AxisState dash = window.isKeyDown(57) ? AxisState.PLUS : AxisState.ZERO;
+    AxisState dash = window.isKeyDown(GLFW.GLFW_KEY_SPACE) ? AxisState.PLUS : AxisState.ZERO;
 
     Shooter player = state.getPlayer(playerId);
     if (x != AxisState.ZERO || y != AxisState.ZERO) {
@@ -351,10 +359,12 @@ public class Client {
         double ballAngle = Math.atan2(mousePosition.y - screenHeight / 2.0, mousePosition.x - screenWidth / 2.0);
         state.getEntity(freeId).create(player.getX(), player.getY(), ballSpecs.getFirst(), ballAngle, ballSpecs.getThird(), ballSpecs.getSecond(),
             false);
-        buffer.clear();
-        buffer.put((byte) 2);
-        state.serialize(freeId, buffer);
-        write(channel, buffer);
+        soundManager.playSound(Sound.BALL_LAUNCH);
+        sendBuffer.put((byte) 8);
+        clientConnection.sendPacket();
+        sendBuffer.put((byte) 2);
+        state.serialize(freeId);
+        clientConnection.sendPacket();
       }
     }
     if (ball == AxisState.PLUS) {
@@ -365,60 +375,56 @@ public class Client {
         double ballAngle = Math.atan2(mousePosition.y - screenHeight / 2.0, mousePosition.x - screenWidth / 2.0);
         state.getEntity(freeId).create(player.getX(), player.getY(), ballSpecs.getFirst(), ballAngle, ballSpecs.getThird(), ballSpecs.getSecond(),
             false);
-        buffer.clear();
-        buffer.put((byte) 2);
-        state.serialize(freeId, buffer);
-        write(channel, buffer);
+        soundManager.playSound(Sound.BALL_LAUNCH);
+        sendBuffer.put((byte) 8);
+        clientConnection.sendPacket();
+        sendBuffer.put((byte) 2);
+        state.serialize(freeId);
+        clientConnection.sendPacket();
       }
     }
     if (dash == AxisState.PLUS) {
-      player.dash();
-    }
-    Set<Integer> keyPressed = window.flushKeys();
-    if (keyPressed.contains(336)) {
-      if (levelUpPosition == Shooter.getLevelNames().length - 1) {
-        levelUpPosition = 0;
-      } else {
-        levelUpPosition++;
+      if (player.dash()) {
+        soundManager.playSound(Sound.PLAYER_DASH);
+        sendBuffer.put((byte) 8);
+        clientConnection.sendPacket();
+        sendBuffer.put((byte) 12);
+        clientConnection.sendPacket();
       }
     }
-    if (keyPressed.contains(328)) {
-      if (levelUpPosition == 0) {
-        levelUpPosition = Shooter.getLevelNames().length - 1;
-      } else {
-        levelUpPosition--;
-      }
-    }
-    if (keyPressed.contains(28)) {
-      int currentLevel = player.getLevels()[levelUpPosition];
-      int neededXp = Properties.getNeededXpFor(currentLevel + 1);
-      if (neededXp <= xp) {
-        if (player.increaseLevel(levelUpPosition)) {
-          xp -= neededXp;
-        }
+    int scroll = window.flushScroll();
+    levelUpPosition = Utils.modulo(levelUpPosition + scroll, player.getLevels().length);
+
+    Set<Integer> mouseButtons = window.flushMouse();
+
+    if (mouseButtons.contains(GLFW.GLFW_MOUSE_BUTTON_MIDDLE)) {
+      int newXp = player.increaseLevel(levelUpPosition, xp);
+      if (newXp != -1) {
+        soundManager.playSound(Sound.LEVEL_UP);
+        xp = newXp;
       }
     }
     return false;
   }
 
-  private void logic() {
+  private void logic() throws IOException {
     state.logic();
   }
 
   private void sendState() throws IOException {
-    buffer.clear();
-    buffer2.clear();
-    buffer.put((byte) 0);
-    state.serialize(playerId, buffer, buffer2, true);
-    write(channel, buffer, buffer2);
+    sendBuffer.put((byte) 0);
+    state.serialize(playerId, true);
+    clientConnection.sendPacket();
   }
 
-  private void exit() {
+  private void exit() throws IOException {
     if (exited) {
       return;
     }
     exited = true;
     window.exit();
+    soundManager.exit();
+    clientConnection.stop();
   }
 
   private void render(float alpha) {
@@ -432,6 +438,7 @@ public class Client {
     float maxY = minY + screenHeight - 1;
 
     window.beginRender(minX + screenWidth / 2f, minY + screenHeight / 2f);
+    soundManager.updateListener(minX + screenWidth / 2f, minY + screenHeight / 2f);
 
     Consumer<Entity> draw = (entity) -> {
       if (entity.isDestroyed()) {
@@ -463,9 +470,9 @@ public class Client {
         }
         float healthPercent = ((Shooter) entity).getHealthPercent();
         if (entity.isEnemy()) { // enemy
-          scale = 100;
+          scale = 60;
           color = new Color(0.5f - 0.4f * healthPercent, 0.5f - 0.15f * healthPercent, 0.5f - 0.4f * healthPercent);
-          window.renderLight(new Light(color, x, y));
+          // window.renderLight(new Light(color, x, y));
           window.renderEntity(new RenderEntity(Model.MONSTER, x, y, angle, scale));
         } else { // player
           if (((Shooter) entity).isFrozen()) {
@@ -473,7 +480,7 @@ public class Client {
           } else {
             color = new Color(0.5f - 0.15f * healthPercent, 0.5f - 0.4f * healthPercent, 0.5f - 0.4f * healthPercent);
           }
-          scale = 100;
+          scale = 60;
           window.renderLight(new Light(color, x, y));
           window.renderEntity(new RenderEntity(Model.PLAYER, x, y, angle, scale));
         }
@@ -482,15 +489,17 @@ public class Client {
           x = nx;
           y = ny;
         }
-        float damagePercent = entity.getHealth() / (float) Shooter.getMaxDamage();
+        float damagePercent = entity.getHealth() / (float) Shooter.getMaxDamage(properties);
         if (entity.isEnemy()) {
           color = Color.getHSBColor(damagePercent, 0.3f, 0.5f);
         } else {
           color = Color.getHSBColor(damagePercent, 0.5f, 0.6f);
         }
-        scale = 10 * entity.getHitbox() / 100f;
-        window.renderLight(new Light(color, x, y));
-        window.renderEntity(new RenderEntity(Model.BALL, x, y, angle, scale));
+        scale = entity.getHitbox() / 100f / 1.3f;
+        if (!entity.isEnemy())
+          window.renderLight(new Light(color, x, y));
+        window.renderEntity(
+            new RenderEntity(entity.getHitbox() == properties.get(Properties.BALL_HITBOX_) ? Model.SMALL_BALL : Model.BALL, x, y, angle, scale));
       }
     };
 
@@ -504,69 +513,28 @@ public class Client {
       draw.accept(state.getPlayer(i));
     }
 
-    // // draw cooldowns
-    // g.setColor(Color.BLUE);
-    // g.fillRect(0, screenHeight - 120, (int) (player.getBallCooldownPercent() * screenWidth), 40);
-    // if (player.getChargedBallChargePercent() > 0) {
-    // g.setColor(Color.RED);
-    // g.fillRect(0, screenHeight - 80, (int) (player.getChargedBallChargePercent() * screenWidth), 40);
-    // } else {
-    // g.setColor(Color.ORANGE);
-    // g.fillRect(0, screenHeight - 80, (int) (player.getChargedBallCooldownPercent() * screenWidth), 40);
-    // }
-    // g.setColor(Color.GREEN);
-    // g.fillRect(0, screenHeight - 40, (int) (player.getDashCooldownPercent() * screenWidth), 40);
-    //
-    // // draw wave state
-    // if (System.nanoTime() - changeWaveStateTime < 4 * 1000000000L /* seconds */) {
-    // g.setColor(Color.BLACK);
-    // g.setFont(waveFont);
-    // String text;
-    // if (waveActive) {
-    // text = "Début de la vague " + wave;
-    // } else {
-    // text = "Fin de la vague " + wave;
-    // }
-    // g.drawString(text, screenWidth / 2 - 200, screenHeight / 2 - 50);
-    // }
-    //
-    // // draw shop
-    // if (window.isKeyDown(42)) {
-    // String[] names = Shooter.getLevelNames();
-    // int[] levels = state.getPlayer(playerId).getLevels();
-    // int length = levels.length;
-    // g.setFont(Font.decode("Comic Sans MS"));
-    // g.setColor(Color.YELLOW);
-    // g.fillRect(0, 0, screenWidth, 50 * (length + 2));
-    // g.setColor(Color.BLACK);
-    // g.drawString("Xp actuelle : " + xp, 20, 50);
-    // for (int i = 0; i < length; i++) {
-    // g.drawString(names[i], 20, 100 + 50 * i);
-    // g.drawString("Niveau actuel : " + levels[i] + " ; Xp nécessaire pour upgrade : " + Properties.getNeededXp(levels[i]+1), 20, 115 + 50 * i);
-    // }
-    // g.setColor(Color.RED);
-    // g.fillRect(5, 100 + 50 * levelUpPosition - 5, 11, 11);
-    // }
+    if (player.getChargedBallChargePercent() > 0) {
+      window.renderCooldowns(player.getBallCooldownPercent(), player.getChargedBallChargePercent(), player.getDashCooldownPercent(), true);
+    } else {
+      window.renderCooldowns(player.getBallCooldownPercent(), player.getChargedBallCooldownPercent(), player.getDashCooldownPercent(), false);
+    }
+
+    if (player.isFrozen()) {
+      window.renderHealth(player.getFreezePercent(), false);
+    } else {
+      window.renderHealth(player.getHealthPercent(), true);
+    }
+
+    if (System.nanoTime() - changeWaveStateTime < 3500 * 1000000L /* milliseconds */) {
+      window.renderWave(wave, !waveActive);
+    }
+
+    if (window.isKeyDown(GLFW.GLFW_KEY_LEFT_SHIFT)) {
+      int[] levels = state.getPlayer(playerId).getLevels();
+      window.renderShop(levels, levelUpPosition, xp);
+    }
 
     window.endRender();
   }
 
-  private void initFrame() throws IOException {
-    window = new Window();
-    window.start();
-    screenWidth = window.getWidth();
-    screenHeight = window.getHeight();
-  }
-
-  private static void write(WritableByteChannel channel, ByteBuffer buf) throws IOException {
-    while (buf.hasRemaining()) {
-      channel.write(buf);
-    }
-  }
-
-  private static void write(GatheringByteChannel channel, ByteBuffer... bufs) throws IOException {
-    while (bufs[bufs.length - 1].hasRemaining()) {
-      channel.write(bufs);
-    }
-  }
 }

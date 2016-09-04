@@ -1,10 +1,20 @@
 package fr.delthas.lightmagique.shared;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Optional;
-import java.util.function.Consumer;
 
 public class State {
+
+  // TODO tout remplacer avec getEntityd
+
+  public interface ConsumerIOException<T> {
+    void accept(T t) throws IOException;
+  }
+
+  public interface TriConsumerIOException<T, U, V> {
+    void accept(T t, U u, V v) throws IOException;
+  }
 
   private Map map = new Map();
   private Properties properties;
@@ -12,27 +22,36 @@ public class State {
   private Shooter[] enemies;
   private Entity[] entities;
 
-  private Consumer<Integer> destroyEntityListener = null;
-  private Consumer<Integer> destroyEnemyListener = null;
-  private Consumer<Void> playerKilledEnemyListener = null;
+  private ConsumerIOException<Integer> destroyEntityListener = null;
+  private ConsumerIOException<Integer> destroyEnemyListener = null;
+  private ConsumerIOException<Void> playerKilledEnemyListener = null;
+  private TriConsumerIOException<Boolean, Integer, Integer> hurtListener = null;
 
-  public State(Properties properties) {
+  private ByteBuffer receiveBuffer;
+  private ByteBuffer sendBuffer;
+
+  public State(ByteBuffer receiveBuffer, ByteBuffer sendBuffer) {
+    this.receiveBuffer = receiveBuffer;
+    this.sendBuffer = sendBuffer;
+  }
+
+  public void initialize(Properties properties) {
     this.properties = properties;
     players = new Shooter[properties.get(Properties.PLAYER_MAX_)];
     for (int i = 0; i < players.length; i++) {
-      players[i] = new Shooter(properties);
+      players[i] = new Shooter(properties, i);
     }
     enemies = new Shooter[properties.get(Properties.ENEMIES_MAX_)];
     for (int i = 0; i < enemies.length; i++) {
-      enemies[i] = new Shooter(properties);
+      enemies[i] = new Shooter(properties, i);
     }
     entities = new Entity[properties.get(Properties.ENTITIES_MAX_)];
     for (int i = 0; i < entities.length; i++) {
-      entities[i] = new Entity();
+      entities[i] = new Entity(i);
     }
   }
 
-  public void logic() {
+  public void logic() throws IOException {
     moveEntities();
     for (int i = 0; i < properties.get(Properties.ENEMIES_MAX_); i++) {
       Shooter shooter = enemies[i];
@@ -48,12 +67,16 @@ public class State {
     }
   }
 
-  public void update(ByteBuffer entity) {
-    entities[entity.getShort()].update(entity);
+  public void update() {
+    entities[receiveBuffer.getShort()].update(receiveBuffer);
   }
 
-  public void update(ByteBuffer entity, ByteBuffer shooter, boolean player) {
-    (player ? players : enemies)[entity.getShort()].update(entity, shooter);
+  public void update(int entityId) {
+    entities[entityId].update(receiveBuffer);
+  }
+
+  public void update(boolean player) {
+    (player ? players : enemies)[receiveBuffer.getShort()].update(receiveBuffer);
   }
 
   public Map getMap() {
@@ -72,17 +95,17 @@ public class State {
     return entities[id];
   }
 
-  public void serialize(int id, ByteBuffer entity) {
-    entity.putShort((short) id);
-    entities[id].serialize(entity);
+  public void serialize(int id) {
+    sendBuffer.putShort((short) id);
+    entities[id].serialize(sendBuffer);
   }
 
-  public void serialize(int id, ByteBuffer entity, ByteBuffer shooter, boolean player) {
-    entity.putShort((short) id);
-    (player ? players : enemies)[id].serialize(entity, shooter);
+  public void serialize(int id, boolean player) {
+    sendBuffer.putShort((short) id);
+    (player ? players : enemies)[id].serialize(sendBuffer);
   }
 
-  private void moveEntities() {
+  private void moveEntities() throws IOException {
     // pour l'instant je fais pas intelligemment le déplacement
     for (Shooter shooter : players) {
       if (shooter.isDestroyed()) {
@@ -108,44 +131,37 @@ public class State {
         continue;
       }
       if (entity.isMoving()) {
-        if (entity.getHitbox() <= properties.get(Properties.BALL_HITBOX_)) {
-          // do not attempt to move it cleverly
-          Pair<Double, Double> pair = tryMoveEntity(entity.getX(), entity.getY(), entity.getSpeed(), entity.getAngle(), false);
-          if (pair != null) {
-            entity.setX(pair.getFirst());
-            entity.setY(pair.getSecond());
-          } else {
+        Pair<Double, Double> pair = tryMoveEntity(entity, 0);
+        if (pair != null) {
+          entity.setX(pair.getFirst());
+          entity.setY(pair.getSecond());
+        } else {
+          entity.setHitbox(entity.getHitbox() - 1);
+          if (entity.getHitbox() <= properties.get(Properties.BALL_HITBOX_)) {
             entity.destroy();
             if (destroyEntityListener != null) {
               destroyEntityListener.accept(i);
             }
             continue;
           }
-        } else {
-          // // attempt to move it cleverly
-          Pair<Double, Double> pair = tryMoveEntity(entity.getX(), entity.getY(), entity.getSpeed(), entity.getAngle(), false);
-          if (pair != null) {
-            entity.setX(pair.getFirst());
-            entity.setY(pair.getSecond());
-          } else {
-            entity.setHitbox(entity.getHitbox() - 1);
-          }
         }
       }
-      for (Shooter shooter : entity.isEnemy() ? players : enemies) {
+      Shooter[] shooters = entity.isEnemy() ? players : enemies;
+      for (int j = 0; j < shooters.length; j++) {
+        Shooter shooter = shooters[j];
         if (shooter.isDestroyed()) {
           continue;
         }
         if (connects(entity.getX(), entity.getY(), shooter.getX(), shooter.getY(), (entity.getHitbox() + shooter.getHitbox()) / 100.0)) {
+          if (hurtListener != null) {
+            hurtListener.accept(entity.isEnemy(), j, entity.getHealth());
+          }
           int shooterHealth = shooter.getHealth();
           int entityHealth = entity.getHealth();
           int decreaseHealth;
           if (!shooter.isFrozen() && shooterHealth <= entityHealth) {
             decreaseHealth = shooterHealth;
             if (!entity.isEnemy()) {
-              for (Shooter player : players) {
-                player.increaseHealth(1);
-              }
               if (playerKilledEnemyListener != null) {
                 playerKilledEnemyListener.accept(null);
               }
@@ -153,7 +169,9 @@ public class State {
           } else {
             decreaseHealth = entityHealth;
           }
-          shooter.decreaseHealth(decreaseHealth);
+          if (shooter.isEnemy()) {
+            shooter.decreaseHealth(decreaseHealth);
+          }
           entity.decreaseHealth(decreaseHealth);
           if (entity.isDestroyed()) {
             if (destroyEntityListener != null) {
@@ -204,28 +222,66 @@ public class State {
   }
 
   public static double distanceSq(Entity e1, Entity e2) {
-    double deltaX = e2.getX() - e1.getX();
-    double deltaY = e2.getY() - e1.getY();
+    return distanceSq(e1.getX(), e1.getY(), e2.getX(), e2.getY());
+  }
+
+  public static double distanceSq(double x1, double y1, double x2, double y2) {
+    double deltaX = x1 - x2;
+    double deltaY = y1 - y2;
     return deltaX * deltaX + deltaY * deltaY;
   }
 
-  public void setDestroyEnemyListener(Consumer<Integer> destroyEnemyListener) {
+  public void setDestroyEnemyListener(ConsumerIOException<Integer> destroyEnemyListener) {
     this.destroyEnemyListener = destroyEnemyListener;
   }
 
-  public void setDestroyEntityListener(Consumer<Integer> destroyEntityListener) {
+  public void setDestroyEntityListener(ConsumerIOException<Integer> destroyEntityListener) {
     this.destroyEntityListener = destroyEntityListener;
   }
 
-  public void setPlayerKilledEnemyListener(Consumer<Void> playerKilledEnemyListener) {
+  public void setHurtListener(TriConsumerIOException<Boolean, Integer, Integer> hurtListener) {
+    this.hurtListener = hurtListener;
+  }
+
+  public void setPlayerKilledEnemyListener(ConsumerIOException<Void> playerKilledEnemyListener) {
     this.playerKilledEnemyListener = playerKilledEnemyListener;
   }
 
-  private Pair<Double, Double> tryMoveEntity(double x, double y, double speed, double angle, boolean shooter) {
-    double nx = x + speed * Math.cos(angle);
-    double ny = y + speed * Math.sin(angle);
+  private Pair<Double, Double> tryMoveEntity(Entity entity, double angleOffset) {
+    double nx = entity.getX() + entity.getSpeed() * Math.cos(entity.getAngle() + angleOffset);
+    double ny = entity.getY() + entity.getSpeed() * Math.sin(entity.getAngle() + angleOffset);
     Terrain terrain = map.getTerrain((int) nx, (int) ny);
-    if (shooter && terrain.playerThrough || !shooter && terrain.ballThrough) {
+    if ((entity instanceof Shooter) && terrain.playerThrough) {
+      double distance = (properties.get(Properties.ENEMY_HITBOX_)
+          + (entity.isEnemy() ? properties.get(Properties.ENEMY_HITBOX_) : properties.get(Properties.PLAYER_HITBOX_))) / 100;
+      distance *= distance;
+      for (Shooter other : enemies) {
+        if (other.isDestroyed() || (entity.isEnemy() && entity.getEntityId() == other.getEntityId()))
+          continue;
+        double afterDistance = distanceSq(nx, ny, other.getX(), other.getY());
+        if (afterDistance <= distance) {
+          double beforeDistance = distanceSq(entity.getX(), entity.getY(), other.getX(), other.getY());
+          if (afterDistance <= beforeDistance) {
+            return null;
+          }
+        }
+      }
+      distance = (properties.get(Properties.PLAYER_HITBOX_)
+          + (entity.isEnemy() ? properties.get(Properties.ENEMY_HITBOX_) : properties.get(Properties.PLAYER_HITBOX_))) / 100;
+      distance *= distance;
+      for (Shooter other : players) {
+        if (other.isDestroyed() || (!entity.isEnemy() && entity.getEntityId() == other.getEntityId()))
+          continue;
+        double afterDistance = distanceSq(nx, ny, other.getX(), other.getY());
+        if (afterDistance <= distance) {
+          double beforeDistance = distanceSq(entity.getX(), entity.getY(), other.getX(), other.getY());
+          if (afterDistance <= beforeDistance) {
+            return null;
+          }
+        }
+      }
+      return new Pair<>(nx, ny);
+    } else if (!(entity instanceof Shooter) && terrain.ballThrough) {
       return new Pair<>(nx, ny);
     }
     return null;
@@ -244,28 +300,30 @@ public class State {
         return Optional.of(Boolean.TRUE);
       }
     }
-    Pair<Double, Double> pair = tryMoveEntity(entity.getX(), entity.getY(), entity.getSpeed(), entity.getAngle(), entity instanceof Shooter);
+    Pair<Double, Double> pair = tryMoveEntity(entity, 0);
     if (pair != null) {
       entity.setX(pair.getFirst());
       entity.setY(pair.getSecond());
       return Optional.of(Boolean.FALSE);
     } else {
       // try to make it move anyway by slightly changing its angle and speed
-      for (double speed = entity.getSpeed(); speed >= 0; speed -= entity.getSpeed() / 5) {
-        for (double angle = 0; angle < (1.5 - speed / entity.getSpeed()) * Math.PI / 1.2; angle += 0.1) {
-          pair = tryMoveEntity(entity.getX(), entity.getY(), speed, entity.getAngle() + angle, true);
+      double speed = entity.getSpeed();
+      for (int i = 0; i < 5; i++) {
+        for (double angle = 0; angle < (1.5 - Double.min(0, speed / entity.getSpeed())) * Math.PI / 1.2; angle += 0.1) {
+          pair = tryMoveEntity(entity, angle);
           if (pair != null) {
             entity.setX(pair.getFirst());
             entity.setY(pair.getSecond());
             return Optional.of(Boolean.TRUE);
           }
-          pair = tryMoveEntity(entity.getX(), entity.getY(), speed, entity.getAngle() - angle, true);
+          pair = tryMoveEntity(entity, -angle);
           if (pair != null) {
             entity.setX(pair.getFirst());
             entity.setY(pair.getSecond());
             return Optional.of(Boolean.TRUE);
           }
         }
+        speed -= entity.getSpeed() / 5;
       }
     }
     return Optional.empty();

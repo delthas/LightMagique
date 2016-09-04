@@ -8,78 +8,108 @@ public class Shooter extends Entity {
 
   private static class Balance {
 
-    public static double getBallSpeed(Shooter shooter) {
-      return 3.0 + 0.5 * shooter.levels[BALL_SPAMITY];
-    }
+    private static final int BALL_SPEED = 0;
+    private static final int BALL_COOLDOWN = 1;
+    private static final int BALL_DAMAGE = 2;
+    private static final int BASE_SPEED = 3;
+    private static final int CHARGED_BALL_CHARGE = 4;
+    private static final int CHARGED_BALL_SPEED = 5;
+    private static final int CHARGED_BALL_MAX_CHARGE = 6;
+    private static final int CHARGED_BALL_SLOWDOWN = 7;
+    private static final int CHARGED_BALL_COOLDOWN = 8;
+    private static final int CHARGED_BALL_HITBOX_CHARGE = 9;
+    private static final int CHARGED_BALL_HITBOX_MAX_CHARGE = 10;
+    private static final int DASH_SPEEDUP = 11;
+    private static final int DASH_DURATION = 12;
+    private static final int DASH_COOLDOWN = 13;
+    private static final int FREEZE_DURATION = 14;
+    private static final int MAX_HEALTH = 15;
 
-    public static int getBallCooldown(Shooter shooter) {
-      return (int) (300 / Math.pow(shooter.levels[BALL_SPAMITY], 1.3));
-    }
+    private static final int MAX_DAMAGE = 16;
+    private static final int XP_NEEDED = 17;
 
-    public static int getBallDamage(Shooter shooter) {
-      return (int) (0.4 + 0.6 * shooter.levels[BALL_POWER]);
-    }
+    private static final int MAX_INDEX = XP_NEEDED;
 
-    public static double getBaseSpeed(Shooter shooter) {
-      if (shooter.levels[PLAYER_SPAMITY] == 0) {
-        return 0;
+    private static final int[] LEVEL_TABLE =
+        {BALL_SPAMITY, BALL_SPAMITY, BALL_POWER, PLAYER_SPAMITY, CHARGED_BALL_POWER, CHARGED_BALL_SPAMITY, CHARGED_BALL_POWER, CHARGED_BALL_SPAMITY,
+            CHARGED_BALL_SPAMITY, CHARGED_BALL_SPAMITY, CHARGED_BALL_POWER, DASH_POWER, DASH_SPAMITY, DASH_SPAMITY, PLAYER_POWER, PLAYER_POWER};
+
+
+    private static double getValue(int type, int level) {
+      switch (type) {
+        case BALL_SPEED:
+          return 3.0 + 0.6 * level;
+        case BALL_COOLDOWN:
+          return 200 * Math.pow(1.07, -Math.pow(level, 1.1));
+        case BALL_DAMAGE:
+          return 1.0 + 0.8 * level;
+        case BASE_SPEED:
+          if (level == 0) {
+            return 0;
+          }
+          return 2.0 + 0.38 * level;
+        case CHARGED_BALL_CHARGE:
+          return 0.01 * 6 * level;
+        case CHARGED_BALL_SPEED:
+          return 1.7 + 0.3 * level;
+        case CHARGED_BALL_MAX_CHARGE:
+          return 15 * level;
+        case CHARGED_BALL_SLOWDOWN:
+          return Math.min(1, 0.035 * level);
+        case CHARGED_BALL_COOLDOWN:
+          return 800 - 8 * level;
+        case CHARGED_BALL_HITBOX_CHARGE:
+          return 100 * 0.01 * 4 * level;
+        case CHARGED_BALL_HITBOX_MAX_CHARGE:
+          return 100 * 10 * level;
+        case DASH_SPEEDUP:
+          return 0.8 + 0.3 * level;
+        case DASH_DURATION:
+          return 50 + level * 8;
+        case DASH_COOLDOWN:
+          return 500 - 15 * level;
+        case FREEZE_DURATION:
+          if (level == 0) {
+            return Short.MAX_VALUE;
+          }
+          return 5 * 500 / (level + 5);
+        case MAX_HEALTH:
+          return 4 * level;
+        case MAX_DAMAGE:
+          return getValue(CHARGED_BALL_MAX_CHARGE, level);
+        case XP_NEEDED:
+          return 1 + (int) (level / 2.5);
+        default:
+          throw new IllegalArgumentException("Pas de type correspondant à " + type);
       }
-      return 2.0 + 0.38 * shooter.levels[PLAYER_SPAMITY];
     }
 
-    public static double getChargedBallCharge(Shooter shooter) {
-      return 0.01 * 7.5 * shooter.levels[CHARGED_BALL_POWER];
+
+    private static final double[][] data = new double[MAX_INDEX + 1][];
+
+    public static double get(int type, Shooter shooter) {
+      return data[type][shooter.levels[LEVEL_TABLE[type]]];
     }
 
-    public static double getChargedBallSpeed(Shooter shooter) {
-      return 1.7 + 0.3 * shooter.levels[CHARGED_BALL_SPAMITY];
+    public static double get(int type, int level) {
+      return data[type][level];
     }
 
-    public static int getChargedBallMaxCharge(Shooter shooter) {
-      return 15 * shooter.levels[CHARGED_BALL_POWER];
-    }
-
-    public static int getMaxDamage() {
-      return 1000;
-    }
-
-    public static double getChargedBallSlowdown(Shooter shooter) {
-      return Math.min(1, 0.035 * shooter.levels[CHARGED_BALL_SPAMITY]);
-    }
-
-    public static int getChargedBallCooldown(Shooter shooter) {
-      return 800 - 8 * shooter.levels[CHARGED_BALL_SPAMITY];
-    }
-
-    public static double getChargedBallHitboxCharge(Shooter shooter) {
-      return 100 * 0.01 * 4 * shooter.levels[CHARGED_BALL_SPAMITY];
-    }
-
-    public static int getChargedBallMaxHitbox(Shooter shooter) {
-      return 100 * 10 * shooter.levels[CHARGED_BALL_POWER];
-    }
-
-    public static double getDashSpeedup(Shooter shooter) {
-      return 0.8 + 0.3 * shooter.levels[DASH_POWER];
-    }
-
-    public static int getDashDuration(Shooter shooter) {
-      return 50 + shooter.levels[DASH_SPAMITY] * 8;
-    }
-
-    public static int getDashCooldown(Shooter shooter) {
-      return 500 - 15 * shooter.levels[DASH_SPAMITY];
-    }
-
-    public static int getFreezeDuration(Shooter shooter) {
-      if (shooter.levels[PLAYER_POWER] == 0) {
-        return Short.MAX_VALUE;
+    public static void generate(int maxLevel) {
+      if (data[0] == null || data[0].length < maxLevel + 1) {
+        for (int i = 0; i < MAX_INDEX + 1; i++) {
+          double[] newData = new double[maxLevel + 1];
+          int startPos = 0;
+          if (data[i] != null) {
+            System.arraycopy(data[i], 0, newData, 0, data[i].length);
+            startPos = data[i].length;
+          }
+          data[i] = newData;
+          for (int j = startPos; j < data[i].length; j++) {
+            data[i][j] = getValue(i, j);
+          }
+        }
       }
-      return 500 - 5 * shooter.levels[PLAYER_POWER];
-    }
-
-    public static int getMaxHealth(Shooter shooter) {
-      return 2 * shooter.levels[PLAYER_POWER];
     }
 
   }
@@ -96,9 +126,8 @@ public class Shooter extends Entity {
   private static final int PLAYER_SPAMITY = 6;
   private static final int PLAYER_POWER = 7;
 
-  private static final String[] LEVEL_NAMES = {"Boule: Spaméïté", "Boule: Puissance", "Boule chargée: Spaméïté", "Boule chargée: Puissance",
-      "Dash: Spaméïté", "Dash: Puissance", "Joueur: Spaméïté", "Joueur: Puissance"};
-  private static final int[] LEVEL_DEFAULTS = {1, 1, 0, 0, 0, 0, 1, 1};
+  private static final int[] LEVEL_DEFAULTS = {1, 0, 0, 0, 0, 0, 1, 1};
+  public static final int LEVELS_AMOUNT = LEVEL_DEFAULTS.length;
   private int[] levels = new int[LEVEL_DEFAULTS.length];
 
   // Cooldowns
@@ -113,7 +142,8 @@ public class Shooter extends Entity {
 
   private Properties properties;
 
-  public Shooter(Properties properties) {
+  public Shooter(Properties properties, int entityId) {
+    super(entityId);
     this.properties = properties;
     for (int i = 0; i < levels.length; i++) {
       levels[i] = LEVEL_DEFAULTS[i];
@@ -121,7 +151,9 @@ public class Shooter extends Entity {
   }
 
   public void createPlayer(double x, double y, double angle) {
-    super.create(x, y, Balance.getBaseSpeed(this), angle, properties.get(Properties.PLAYER_HITBOX_), Balance.getMaxHealth(this), false);
+    super.create(x, y, Balance.get(Balance.BASE_SPEED, this), angle, properties.get(Properties.PLAYER_HITBOX_),
+        (int) Balance.get(Balance.MAX_HEALTH, this), false);
+    setMoving(false);
     reset();
   }
 
@@ -130,7 +162,7 @@ public class Shooter extends Entity {
       Arrays.fill(levels, 1 + globalLevel);
     } else {
       Arrays.fill(levels, 1);
-      levels[PLAYER_POWER] = 1 + (int) (0.8 * globalLevel);
+      levels[PLAYER_POWER] = 1 + (int) (0.2 * globalLevel);
       for (int i = 0; i < globalLevel; i++) {
         levels[random.nextInt(levels.length)]++;
       }
@@ -138,7 +170,8 @@ public class Shooter extends Entity {
         levels[i] = Math.min(levels[i], properties.get(Properties.MAX_LEVEL_));
       }
     }
-    super.create(x, y, Balance.getBaseSpeed(this), angle, properties.get(Properties.ENEMY_HITBOX_), Balance.getMaxHealth(this), true);
+    super.create(x, y, Balance.get(Balance.BASE_SPEED, this), angle, properties.get(Properties.ENEMY_HITBOX_),
+        (int) Balance.get(Balance.MAX_HEALTH, this), true);
     reset();
   }
 
@@ -151,8 +184,9 @@ public class Shooter extends Entity {
     dashDuration = 0;
   }
 
-  void update(ByteBuffer entity, ByteBuffer shooter) {
-    super.update(entity);
+  @Override
+  void update(ByteBuffer shooter) {
+    super.update(shooter);
     levels[PLAYER_SPAMITY] = shooter.get();
     levels[CHARGED_BALL_SPAMITY] = shooter.get();
     levels[DASH_POWER] = shooter.get();
@@ -162,8 +196,9 @@ public class Shooter extends Entity {
     chargeTicks = shooter.get() != 0 ? 0 : -1;
   }
 
-  void serialize(ByteBuffer entity, ByteBuffer shooter) {
-    super.serialize(entity);
+  @Override
+  void serialize(ByteBuffer shooter) {
+    super.serialize(shooter);
     shooter.put((byte) levels[PLAYER_SPAMITY]);
     shooter.put((byte) levels[CHARGED_BALL_SPAMITY]);
     shooter.put((byte) levels[DASH_POWER]);
@@ -171,7 +206,6 @@ public class Shooter extends Entity {
     shooter.putShort((short) freezeDuration);
     shooter.putShort((short) dashDuration);
     shooter.put(isCharging() ? (byte) 1 : (byte) 0);
-    shooter.flip();
   }
 
   public void logic() {
@@ -212,12 +246,13 @@ public class Shooter extends Entity {
     if (isCharging()) {
       return null;
     }
-    ballCooldown = Balance.getBallCooldown(this);
+    ballCooldown = (int) Balance.get(Balance.BALL_COOLDOWN, this);
     if (isFrozen()) {
       // Faire perdre le cooldown même si on lance rien, si on est freeze
       return null;
     }
-    return new Triplet<>(Balance.getBallSpeed(this), Balance.getBallDamage(this), properties.get(Properties.BALL_HITBOX_));
+    return new Triplet<>(Balance.get(Balance.BALL_SPEED, this), (int) Balance.get(Balance.BALL_DAMAGE, this),
+        properties.get(Properties.BALL_HITBOX_));
   }
 
   /**
@@ -227,15 +262,15 @@ public class Shooter extends Entity {
     if (dashCooldown > 0) {
       return false;
     }
-    dashCooldown = Balance.getDashCooldown(this);
-    dashDuration = Balance.getDashDuration(this);
+    dashCooldown = (int) Balance.get(Balance.DASH_COOLDOWN, this);
+    dashDuration = (int) Balance.get(Balance.DASH_DURATION, this);
     recomputeSpeed();
     return true;
   }
 
   @Override
   public void increaseHealth(int amount) {
-    int maxHealth = Balance.getMaxHealth(this);
+    int maxHealth = (int) Balance.get(Balance.MAX_HEALTH, this);
     if (getHealth() + amount >= maxHealth) {
       super.increaseHealth(maxHealth - getHealth());
     } else {
@@ -247,7 +282,7 @@ public class Shooter extends Entity {
   protected void zeroHealth() {
     dashDuration = 0;
     chargeTicks = -1;
-    freezeDuration = Balance.getFreezeDuration(this);
+    freezeDuration = (int) Balance.get(Balance.FREEZE_DURATION, this);
     recomputeSpeed();
   }
 
@@ -296,21 +331,21 @@ public class Shooter extends Entity {
       return null;
     }
     int ballHealth;
-    int charge = (int) (Balance.getChargedBallCharge(this) * chargeTicks);
-    if (charge >= Balance.getChargedBallMaxCharge(this)) {
-      ballHealth = 2 * Balance.getChargedBallMaxCharge(this);
+    int charge = (int) (Balance.get(Balance.CHARGED_BALL_CHARGE, this) * chargeTicks);
+    if (charge >= Balance.get(Balance.CHARGED_BALL_MAX_CHARGE, this)) {
+      ballHealth = (int) (2 * Balance.get(Balance.CHARGED_BALL_MAX_CHARGE, this));
     } else {
       ballHealth = charge;
     }
-    int ballHitbox = properties.get(Properties.BALL_HITBOX_)
-        + (int) Math.min(Balance.getChargedBallHitboxCharge(this) * chargeTicks, Balance.getChargedBallMaxHitbox(this));
+    int ballHitbox = properties.get(Properties.BALL_HITBOX_) + (int) Math.min(Balance.get(Balance.CHARGED_BALL_HITBOX_CHARGE, this) * chargeTicks,
+        Balance.get(Balance.CHARGED_BALL_HITBOX_MAX_CHARGE, this));
     chargeTicks = -1;
-    chargedBallCooldown = Balance.getChargedBallCooldown(this);
+    chargedBallCooldown = (int) Balance.get(Balance.CHARGED_BALL_COOLDOWN, this);
     recomputeSpeed();
     if (ballHealth == 0) {
       return null;
     }
-    return new Triplet<>(Balance.getChargedBallSpeed(this), ballHealth, ballHitbox);
+    return new Triplet<>(Balance.get(Balance.CHARGED_BALL_SPEED, this), ballHealth, ballHitbox);
   }
 
   private void recomputeSpeed() {
@@ -321,18 +356,14 @@ public class Shooter extends Entity {
       setSpeed(0);
       return;
     }
-    double newSpeed = Balance.getBaseSpeed(this);
+    double newSpeed = Balance.get(Balance.BASE_SPEED, this);
     if (isDashing()) {
-      newSpeed *= Balance.getDashSpeedup(this);
+      newSpeed *= Balance.get(Balance.DASH_SPEEDUP, this);
     }
     if (isCharging()) {
-      newSpeed *= Balance.getChargedBallSlowdown(this);
+      newSpeed *= Balance.get(Balance.CHARGED_BALL_SLOWDOWN, this);
     }
     setSpeed(newSpeed);
-  }
-
-  public static String[] getLevelNames() {
-    return Arrays.copyOf(LEVEL_NAMES, LEVEL_NAMES.length);
   }
 
   public int[] getLevels() {
@@ -340,41 +371,50 @@ public class Shooter extends Entity {
   }
 
   /**
-   * @return true si le niveau a bien été monté
+   * @return l'xp restante, ou -1 si le niveau n'a pas été monté
    */
-  public boolean increaseLevel(int i) {
-    if (levels[i] == properties.get(Properties.MAX_LEVEL_)) {
-      return false;
+  public int increaseLevel(int i, int xp) {
+    if (levels[i] == properties.get(Properties.MAX_LEVEL_) || xp < (int) Balance.get(Balance.XP_NEEDED, levels[i] + 1)) {
+      return -1;
     }
     levels[i]++;
     recomputeSpeed();
-    return true;
+    return xp - (int) Balance.get(Balance.XP_NEEDED, levels[i]);
   }
 
   public float getDashCooldownPercent() {
-    return 1.0f - (float) dashCooldown / Balance.getDashCooldown(this);
+    return (float) (1.0 - dashCooldown / Balance.get(Balance.DASH_COOLDOWN, this));
   }
 
   public float getBallCooldownPercent() {
-    return 1.0f - (float) ballCooldown / Balance.getBallCooldown(this);
+    return (float) (1.0 - ballCooldown / Balance.get(Balance.BALL_COOLDOWN, this));
   }
 
   public float getChargedBallCooldownPercent() {
-    return 1.0f - (float) chargedBallCooldown / Balance.getChargedBallCooldown(this);
+    return (float) (1.0 - chargedBallCooldown / Balance.get(Balance.CHARGED_BALL_COOLDOWN, this));
   }
 
   public float getChargedBallChargePercent() {
     if (chargeTicks < 0) {
       return 0.0f;
     }
-    return (float) Math.min(Balance.getChargedBallHitboxCharge(this) * chargeTicks / Balance.getChargedBallMaxHitbox(this), 1.0f);
+    return (float) Math
+        .min(Balance.get(Balance.CHARGED_BALL_HITBOX_CHARGE, this) * chargeTicks / Balance.get(Balance.CHARGED_BALL_HITBOX_MAX_CHARGE, this), 1.0);
   }
 
   public float getHealthPercent() {
-    return (float) getHealth() / Balance.getMaxHealth(this);
+    return (float) (getHealth() / Balance.get(Balance.MAX_HEALTH, this));
   }
 
-  public static final int getMaxDamage() {
-    return Balance.getMaxDamage();
+  public float getFreezePercent() {
+    return (float) (1.0 - freezeDuration / Balance.get(Balance.FREEZE_DURATION, this));
+  }
+
+  public static int getMaxDamage(Properties properties) {
+    return (int) Balance.get(Balance.MAX_DAMAGE, properties.get(Properties.MAX_LEVEL_));
+  }
+
+  public static void initialize(Properties properties) {
+    Balance.generate(properties.get(Properties.MAX_LEVEL_));
   }
 }

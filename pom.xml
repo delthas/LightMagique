@@ -14,44 +14,100 @@
 		<dependency>
 			<groupId>org.lwjgl</groupId>
 			<artifactId>lwjgl</artifactId>
-			<version>3.0.0b</version>
+			<version>3.0.0</version>
 		</dependency>
 		<dependency>
 			<groupId>org.lwjgl</groupId>
 			<artifactId>lwjgl-platform</artifactId>
-			<version>3.0.0b</version>
+			<version>3.0.0</version>
 			<classifier>natives-windows</classifier>
 		</dependency>
 	</dependencies>
 
 	<build>
+		<extensions>
+			<extension>
+				<groupId>org.apache.maven.wagon</groupId>
+				<artifactId>wagon-ftp</artifactId>
+				<version>2.10</version>
+			</extension>
+		</extensions>
 		<plugins>
 			<plugin>
-				<artifactId>maven-shade-plugin</artifactId>
-				<version>2.4.3</version>
+				<artifactId>maven-dependency-plugin</artifactId>
+				<version>2.10</version>
 				<executions>
 					<execution>
+						<id>unpack-dependencies</id>
 						<phase>package</phase>
 						<goals>
-							<goal>shade</goal>
+							<goal>unpack-dependencies</goal>
 						</goals>
 						<configuration>
-							<createDependencyReducedPom>false</createDependencyReducedPom>
-							<minimizeJar>true</minimizeJar>
-							<filters>
-								<filter>
-									<artifact>*:*</artifact>
-									<excludes>
-										<exclude>META-INF/**</exclude>
-									</excludes>
-								</filter>
-							</filters>
-							<transformers>
-								<transformer
-									implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-									<mainClass>fr.delthas.lightmagique.client.Client</mainClass>
-								</transformer>
-							</transformers>
+							<outputDirectory>${project.build.directory}/libs</outputDirectory>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+			<plugin>
+				<artifactId>maven-jar-plugin</artifactId>
+				<version>3.0.2</version>
+				<executions>
+					<execution>
+						<id>default-jar</id>
+						<phase>package</phase>
+						<configuration>
+							<archive>
+								<manifestEntries>
+									<Main-Class>fr.delthas.lightmagique.client.Client</Main-Class>
+									<Class-Path>${project.artifactId}-dep.jar</Class-Path>
+								</manifestEntries>
+							</archive>
+						</configuration>
+					</execution>
+					<execution>
+						<id>dep-jar</id>
+						<phase>none</phase>
+						<goals>
+							<goal>jar</goal>
+						</goals>
+						<configuration>
+							<classesDirectory>${project.build.directory}/libs</classesDirectory>
+							<outputDirectory>${project.build.directory}</outputDirectory>
+							<classifier>dep</classifier>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+			<plugin>
+				<groupId>org.codehaus.mojo</groupId>
+				<artifactId>wagon-maven-plugin</artifactId>
+				<version>1.0</version>
+				<executions>
+					<execution>
+						<id>main</id>
+						<phase>package</phase>
+						<goals>
+							<goal>upload-single</goal>
+						</goals>
+						<configuration>
+							<serverId>ftp</serverId>
+							<fromFile>${project.build.directory}/${project.build.finalName}.jar</fromFile>
+							<url>ftp://delthas.legtux.org/project</url>
+							<toFile>${project.artifactId}.jar</toFile>
+						</configuration>
+					</execution>
+					<execution>
+						<id>dependencies</id>
+						<phase>none</phase>  <!-- Set to package when updating libraries -->
+						<goals>
+							<goal>upload-single</goal>
+						</goals>
+						<configuration>
+							<serverId>ftp</serverId>
+							<fromFile>${project.build.directory}/${project.build.finalName}-dep.jar</fromFile>
+							<url>ftp://delthas.legtux.org/project</url>
+							<toFile>${project.artifactId}-dep.jar</toFile>
 						</configuration>
 					</execution>
 				</executions>
@@ -69,7 +125,11 @@
 			<resource>
 				<directory>src/main/resources</directory>
 				<excludes>
-					<exclude>models/**</exclude> <!-- Do not include models in generated jars (too heavy) -->
+					<exclude>models/**</exclude>
+					<exclude>sounds/background.ogg</exclude>
+					<exclude>map.png</exclude>
+					<exclude>waveend.png</exclude>
+					<exclude>wavestart.png</exclude>
 				</excludes>
 			</resource>
 		</resources>

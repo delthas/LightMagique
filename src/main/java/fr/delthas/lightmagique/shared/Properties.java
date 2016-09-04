@@ -14,14 +14,13 @@ public class Properties {
   public static final int TICK_TIME = 10;
   public static final int ENTITY_MESSAGE_LENGTH = 31;
   public static final int SHOOTER_MESSAGE_LENGTH = 9;
-
-  public static int getNeededXpFor(int level) {
-    return level;
-  }
+  public static final byte PROTOCOL_ID = (byte) 0xCC;
+  public static final int PACKET_MAX_SIZE = 1500 - 20 - 8 - 9;
+  public static final float TIMEOUT = 30f; // seconds
 
   private static final String[] PROPERTIES_NAMES = {"playerMax", "enemiesMax", "entitiesMax", "entitiesPersonalSize", "sendStateInterval", "maxLevel",
-      "xpPerHit", "playerHitbox", "enemyHitbox", "ballHitbox"};
-  private static final int[] PROPERTIES_DEFAULTS = {1, 300, 600, 50, 8, 20, 3, 50 * 100, 50 * 100, 5 * 100};
+      "xpPerHit", "playerHitbox", "enemyHitbox", "ballHitbox", "startXp", "playerCollisionBox", "enemyCollisionBox"};
+  private static final int[] PROPERTIES_DEFAULTS = {2, 200, 1500, 50, 3, 50, 3, 30 * 100, 30 * 100, 10 * 100, 5, 5 * 100, 8 * 100};
 
   public static final int PROPERTIES_MESSAGE_LENGTH = 4 * PROPERTIES_DEFAULTS.length;
 
@@ -37,6 +36,10 @@ public class Properties {
   public static final int PLAYER_HITBOX_ = 7;
   public static final int ENEMY_HITBOX_ = 8;
   public static final int BALL_HITBOX_ = 9;
+  public static final int START_XP_ = 10;
+  public static final int PLAYER_COLLISION_BOX = 11;
+  public static final int ENEMY_COLLISION_BOX = 12;
+
 
   private int[] properties = new int[PROPERTIES_NAMES.length];
   {
@@ -77,14 +80,10 @@ public class Properties {
     }
   }
 
-  /**
-   * note: flips the buffer
-   */
   public void serialize(ByteBuffer buffer) {
-    for (int propertie : properties) {
-      buffer.putInt(propertie);
+    for (int property : properties) {
+      buffer.putInt(property);
     }
-    buffer.flip();
   }
 
   public static void writeDefaultProperties(Path propertiesFile) throws IOException {

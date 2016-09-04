@@ -5,15 +5,11 @@ import java.awt.datatransfer.StringSelection;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.net.InetSocketAddress;
-import java.net.StandardSocketOptions;
 import java.nio.ByteBuffer;
-import java.nio.channels.GatheringByteChannel;
-import java.nio.channels.ServerSocketChannel;
-import java.nio.channels.SocketChannel;
-import java.nio.channels.WritableByteChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 
 import fr.delthas.lightmagique.shared.Properties;
@@ -21,6 +17,7 @@ import fr.delthas.lightmagique.shared.Shooter;
 import fr.delthas.lightmagique.shared.State;
 import fr.delthas.lightmagique.shared.Triplet;
 import fr.delthas.lightmagique.shared.Utils;
+import fr.delthas.network.ServerConnection;
 
 public class Server {
 
@@ -29,23 +26,17 @@ public class Server {
   private Random random = new Random();
   private State state;
   private boolean stopRequested = false;
-  private SocketChannel[] channels;
-  private ByteBuffer[] types;
-  private ByteBuffer[] buffers;
-  private ByteBuffer[] buffers2;
-  private ByteBuffer buffer;
-  private ByteBuffer buffer2;
-  private ByteBuffer changeIdBuffer;
-  private ByteBuffer startBuffer;
-  private ByteBuffer propertiesBuffer;
-  private ByteBuffer oneByteBuffer;
-  private ByteBuffer waveStartBuffer;
   private int sendCount;
+  private ServerConnection serverConnection;
+
+  private ByteBuffer sendBuffer;
+  private ByteBuffer receiveBuffer;
 
   private int wave = 0;
   private int ticksUntilNextWave = 0; // -1 = waiting for no enemy left
+  private int ticksSinceLastWave = 0;
 
-  private int clientThatSentExit = -1;
+  private List<Integer> disconnectedClients = new ArrayList<>();
 
   public static void main(String... args) {
     int port = Properties.DEFAULT_PORT;
@@ -59,7 +50,7 @@ public class Server {
       }
     }
     System.out.println("Starting on port: " + port);
-    Path propertiesPath = Utils.getCurrentFolder().resolve(PROPERTIES_FILE);
+    Path propertiesPath = Utils.getFile(PROPERTIES_FILE);
     Properties properties;
     if (Files.exists(propertiesPath)) {
       try {
@@ -94,99 +85,63 @@ public class Server {
 
   private Server(Properties properties) {
     this.properties = properties;
-    channels = new SocketChannel[properties.get(Properties.PLAYER_MAX_)];
-    types = new ByteBuffer[properties.get(Properties.PLAYER_MAX_)];
-    buffers = new ByteBuffer[properties.get(Properties.PLAYER_MAX_)];
-    buffers2 = new ByteBuffer[properties.get(Properties.PLAYER_MAX_)];
-    state = new State(properties);
+    serverConnection = new ServerConnection(Properties.PROTOCOL_ID, Properties.TIMEOUT, Properties.PACKET_MAX_SIZE);
+    sendBuffer = serverConnection.getSendBuffer();
+    receiveBuffer = serverConnection.getReceiveBuffer();
+    state = new State(receiveBuffer, sendBuffer);
+    state.initialize(properties);
     state.getMap().getAndForgetMapImage();
+    Shooter.initialize(properties);
   }
 
   private void start(int port) throws IOException {
+    serverConnection.start(port);
     for (int i = 0; i < properties.get(Properties.PLAYER_MAX_); i++) {
-      types[i] = ByteBuffer.allocateDirect(1);
-      buffers[i] = ByteBuffer.allocateDirect(Properties.ENTITY_MESSAGE_LENGTH);
-      buffers2[i] = ByteBuffer.allocateDirect(Properties.SHOOTER_MESSAGE_LENGTH);
+      // TODO handle better connecting
+      serverConnection.receivePacket(true);
+      sendBuffer.clear();
+      sendBuffer.put((byte) 14);
+      properties.serialize(sendBuffer);
+      serverConnection.sendPacket(i, true);
     }
-    buffer = ByteBuffer.allocateDirect(1 + Properties.ENTITY_MESSAGE_LENGTH);
-    buffer2 = ByteBuffer.allocateDirect(Properties.SHOOTER_MESSAGE_LENGTH);
-    changeIdBuffer = ByteBuffer.allocateDirect(5);
-    startBuffer = ByteBuffer.allocateDirect(2);
-    propertiesBuffer = ByteBuffer.allocateDirect(Properties.PROPERTIES_MESSAGE_LENGTH);
-    oneByteBuffer = ByteBuffer.allocateDirect(1);
-    waveStartBuffer = ByteBuffer.allocateDirect(5);
-
-    try (ServerSocketChannel serverSocketChannel = ServerSocketChannel.open()) {
-      serverSocketChannel.configureBlocking(true);
-      serverSocketChannel.bind(new InetSocketAddress(port));
-      for (int i = 0; i < properties.get(Properties.PLAYER_MAX_); i++) {
-        channels[i] = serverSocketChannel.accept();
-        channels[i].setOption(StandardSocketOptions.TCP_NODELAY, Boolean.TRUE);
-        channels[i].configureBlocking(true);
-        propertiesBuffer.clear();
-        properties.serialize(propertiesBuffer);
-        write(channels[i], propertiesBuffer);
-      }
-      for (int i = 0; i < properties.get(Properties.PLAYER_MAX_); i++) {
-        startBuffer.clear();
-        startBuffer.putShort((short) i).flip();
-        write(channels[i], startBuffer);
-        channels[i].configureBlocking(false);
-      }
-      for (int i = 0; i < properties.get(Properties.PLAYER_MAX_); i++) {
-        Shooter entity = state.getPlayer(i);
-        double angle = Math.random() * Math.PI * 2;
-        double x = (double) state.getMap().getWidth() / 2;
-        double y = (double) state.getMap().getHeight() / 2;
-        entity.createPlayer(x, y, angle);
-      }
-      for (int i = 0; i < properties.get(Properties.PLAYER_MAX_); i++) {
-        buffer.clear();
-        buffer.put((byte) 0);
-        buffer2.clear();
-        state.serialize(i, buffer, buffer2, true);
-        write(channels[i], buffer, buffer2);
-        buffer.rewind();
-        buffer2.rewind();
-      }
-      state.setDestroyEnemyListener(this::sendEnemy);
-      state.setDestroyEntityListener(this::sendEntity);
-      state.setPlayerKilledEnemyListener(_void -> {
-        oneByteBuffer.clear();
-        oneByteBuffer.put((byte) 4).flip();
-        for (int i = 0; i < properties.get(Properties.PLAYER_MAX_); i++) {
-          write(channels[i], oneByteBuffer);
-          oneByteBuffer.rewind();
-        }
-      });
-      loop();
-      oneByteBuffer.clear();
-      oneByteBuffer.put((byte) 7).flip();
-      for (int i = 0; i < properties.get(Properties.PLAYER_MAX_); i++) {
-        if (i == clientThatSentExit) {
-          continue;
-        }
-        write(channels[i], oneByteBuffer);
-        oneByteBuffer.rewind();
-      }
-
-      // need to do a clumsy poll here b/c the channel is non blocking
-      // wait for server to exit (5 seconds at most)
-      outer: for (int i = 0; i < 50; i++) {
-        try {
-          Thread.sleep(100);
-        } catch (InterruptedException e) {
-          break;
-        }
-        for (int j = 0; j < properties.get(Properties.PLAYER_MAX_); j++) {
-          if (channels[j].isConnected()) {
-            continue outer;
-          }
-        }
-        break;
-      }
+    for (int i = 0; i < properties.get(Properties.PLAYER_MAX_); i++) {
+      sendBuffer.clear();
+      sendBuffer.put((byte) 15);
+      sendBuffer.putShort((short) i);
+      serverConnection.sendPacket(i, true);
     }
+    for (int i = 0; i < properties.get(Properties.PLAYER_MAX_); i++) {
+      Shooter entity = state.getPlayer(i);
+      double angle = Math.random() * Math.PI * 2;
+      double x = (double) state.getMap().getWidth() / 2;
+      double y = (double) state.getMap().getHeight() / 2;
+      entity.createPlayer(x, y, angle);
+    }
+    for (int i = 0; i < properties.get(Properties.PLAYER_MAX_); i++) {
+      sendBuffer.clear();
+      sendBuffer.put((byte) 0);
+      state.serialize(i, true);
+      serverConnection.sendPacket(i);
+    }
+    state.setDestroyEnemyListener(this::sendEnemy);
+    state.setDestroyEntityListener(this::sendEntity);
+    state.setPlayerKilledEnemyListener(_void -> {
+      sendBuffer.clear();
+      sendBuffer.put((byte) 4);
+      sendToAll();
+    });
+    state.setHurtListener((player, id, damage) -> {
+      sendBuffer.clear();
+      sendBuffer.put(player ? (byte) 10 : (byte) 11).putShort(id.shortValue()).putShort(damage.shortValue());
+      sendToAll();
+    });
+    System.out.println("Donc ça a démarré là ^^ ");
+    loop();
+    sendBuffer.clear();
+    sendBuffer.put((byte) 7);
+    sendToAllExcept(disconnectedClients);
   }
+
 
   private void loop() throws IOException {
     sendCount = 0;
@@ -198,6 +153,11 @@ public class Server {
       lastFrame = newTime;
       accumulator += deltaTime;
       while (accumulator >= Properties.TICK_TIME * 1000000) {
+        List<Integer> timeouts = serverConnection.update(deltaTime / 1000000000f);
+        if (!timeouts.isEmpty()) {
+          disconnectedClients.addAll(timeouts);
+          return;
+        }
         if (receiveState()) {
           return;
         }
@@ -220,59 +180,50 @@ public class Server {
   }
 
   private boolean receiveState() throws IOException {
-    outer: for (int i = 0; i < properties.get(Properties.PLAYER_MAX_); i++) {
-      while (true) {
-        if (types[i].position() == 0) { // on sait pas le type du message suivant
-          int read = channels[i].read(types[i]);
-          if (read == 0) {
-            break;
+    while (true) {
+      int address = serverConnection.receivePacket();
+      if (address == -1) {
+        break;
+      }
+      int type = receiveBuffer.get();
+      switch (type) {
+        case 0:
+        case 1:
+          while (receiveBuffer.hasRemaining()) {
+            state.update(type == 0);
           }
-          buffers[i].clear();
-          buffers2[i].clear();
-        }
-        int type = types[i].get(0);
-        switch (type) {
-          case 0:
-          case 1:
-            channels[i].read(new ByteBuffer[] {buffers[i], buffers2[i]});
-            if (buffers2[i].hasRemaining()) {
-              continue outer;
-            }
-            buffers[i].flip();
-            buffers2[i].flip();
-            state.update(buffers[i], buffers2[i], type == 0);
-            break;
-          case 2:
-            channels[i].read(buffers[i]);
-            if (buffers[i].hasRemaining()) {
-              continue outer;
-            }
-            buffers[i].flip();
-            int id = buffers[i].getShort(0);
+          break;
+        case 2:
+          while (receiveBuffer.hasRemaining()) {
+            int id = receiveBuffer.getShort();
             if (id >= properties.get(Properties.ENTITIES_MAX_) - properties.get(Properties.ENTITIES_PERSONAL_SPACE_SIZE_)) {
               int freeId = state.getFreeEntityId(false);
-              buffers[i].putShort(0, (short) freeId);
-              changeIdBuffer.clear();
-              changeIdBuffer.put((byte) 3).putShort((short) id).putShort((short) freeId).flip();
-              write(channels[i], changeIdBuffer);
+              sendBuffer.clear();
+              sendBuffer.put((byte) 3).putShort((short) id).putShort((short) freeId);
+              serverConnection.sendPacket(address);
               id = freeId;
             }
-            state.update(buffers[i]);
+            state.update(id); // override entity id
             sendEntity(id);
-            break;
-          case 7:
-            clientThatSentExit = i;
-            return true;
-          default:
-            throw new IOException("Unknown message: type " + type);
-        }
-        types[i].clear();
+          }
+          break;
+        case 7:
+          disconnectedClients.add(address);
+          return true;
+        case 8:
+        case 12:
+          sendBuffer.clear();
+          sendBuffer.put((byte) type).putShort((short) address);
+          sendToAllExcept(address);
+          break;
+        default:
+          throw new IOException("Unknown message: type " + type);
       }
     }
     return false;
   }
 
-  private void logic() {
+  private void logic() throws IOException {
     if (sendCount % 5 == 0) {
       for (int i = 0; i < properties.get(Properties.ENEMIES_MAX_); i++) {
         Shooter enemy = state.getEnemy(i);
@@ -290,7 +241,11 @@ public class Server {
         }
         double angle = Math.atan2(player.getY() - enemy.getY(), player.getX() - enemy.getX());
         enemy.setAngle(angle);
-        enemy.dash();
+        if (ticksSinceLastWave > 140 && enemy.dash()) {
+          sendBuffer.clear();
+          sendBuffer.put((byte) 13).putShort((short) i);
+          sendToAll();
+        }
         if (player.isFrozen() && min < 50 * 50) {
           enemy.setMoving(false);
         } else {
@@ -301,6 +256,9 @@ public class Server {
           int id = state.getFreeEntityId(false);
           state.getEntity(id).create(enemy.getX(), enemy.getY(), ball.getFirst(), angle, ball.getThird(), ball.getSecond(), true);
           sendEntity(id);
+          sendBuffer.clear();
+          sendBuffer.put((byte) 9).putShort((short) i);
+          sendToAll();
         }
         if (enemy.getChargedBallChargePercent() == 1.0f) {
           ball = enemy.stopCharge();
@@ -308,6 +266,9 @@ public class Server {
             int id = state.getFreeEntityId(false);
             state.getEntity(id).create(enemy.getX(), enemy.getY(), ball.getFirst(), angle, ball.getThird(), ball.getSecond(), true);
             sendEntity(id);
+            sendBuffer.clear();
+            sendBuffer.put((byte) 9).putShort((short) i);
+            sendToAll();
           }
         }
         if (!enemy.isCharging() && enemy.canCharge() && random.nextInt(1000) == 0) {
@@ -315,30 +276,38 @@ public class Server {
         }
       }
     }
-
+    ticksSinceLastWave++;
     if (ticksUntilNextWave == 0) {
       ticksUntilNextWave = -1;
+      ticksSinceLastWave = 0;
       wave++;
-      waveStartBuffer.clear();
-      waveStartBuffer.put((byte) 5).putInt(wave).flip();
-      for (int i = 0; i < properties.get(Properties.PLAYER_MAX_); i++) {
-        write(channels[i], waveStartBuffer);
-        waveStartBuffer.rewind();
-      }
-      for (int i = 0; i < wave; i++) {
+      sendBuffer.clear();
+      sendBuffer.put((byte) 5).putShort((short) wave);
+      sendToAll();
+      for (int i = 0; i < 1 + wave / 3; i++) {
         int x;
         int y;
+        boolean farEnough = true;
         do {
           x = random.nextInt(state.getMap().getWidth());
           y = random.nextInt(state.getMap().getHeight());
-        } while (!state.getMap().getTerrain(x, y).canSpawn);
-        for (int j = 0; j < random.nextInt((int) (1.5 * wave)); j++) {
+          for (int j = 0; j < properties.get(Properties.PLAYER_MAX_); j++) {
+            Shooter player = state.getPlayer(j);
+            double deltaXSq = player.getX() - x;
+            double deltaYSq = player.getY() - y;
+            if (deltaXSq * deltaXSq + deltaYSq * deltaYSq < 200 * 200) {
+              farEnough = false;
+              break;
+            }
+          }
+        } while (farEnough && !state.getMap().getTerrain(x, y).canSpawn);
+        for (int j = 0; j < random.nextInt(wave); j++) {
           Shooter enemy = state.getEnemy(state.getFreeEnemyId());
           double angle = random.nextDouble() * Math.PI * 2;
           int nx = x + random.nextInt(101) - 50;
           int ny = y + random.nextInt(101) - 50;
           if (state.getMap().getTerrain(nx, ny).canSpawn) {
-            enemy.createEnemy(nx, ny, angle, 2 * wave, true);
+            enemy.createEnemy(nx, ny, angle, wave, true);
           }
         }
       }
@@ -353,80 +322,81 @@ public class Server {
         }
       }
       if (allDestroyed) {
-        oneByteBuffer.clear();
-        oneByteBuffer.put((byte) 6).flip();
-        for (int i = 0; i < properties.get(Properties.PLAYER_MAX_); i++) {
-          write(channels[i], oneByteBuffer);
-          oneByteBuffer.rewind();
-        }
+        sendBuffer.clear();
+        sendBuffer.put((byte) 6);
+        sendToAll();
         ticksUntilNextWave = 1000;
       }
     }
     state.logic();
   }
 
-  private void sendState() {
+  private void sendState() throws IOException {
     for (int i = 0; i < properties.get(Properties.PLAYER_MAX_); i++) {
-      buffer.clear();
-      buffer.put((byte) 0);
-      buffer2.clear();
-      state.serialize(i, buffer, buffer2, true);
-      for (int j = 0; j < properties.get(Properties.PLAYER_MAX_); j++) {
-        if (i == j) {
-          continue;
-        }
-        write(channels[j], buffer, buffer2);
-        buffer.rewind();
-        buffer2.rewind();
-      }
+      sendPlayer(i);
     }
+    sendBuffer.clear();
+    sendBuffer.put((byte) 1);
+    int j = 0;
     for (int i = 0; i < properties.get(Properties.ENEMIES_MAX_); i++) {
       if (state.getEnemy(i).isDestroyed()) {
         continue;
       }
-      sendEnemy(i);
-    }
-  }
-
-  private void sendEntity(int id) {
-    buffer.clear();
-    buffer.put((byte) 2);
-    state.serialize(id, buffer);
-    for (int i = 0; i < properties.get(Properties.PLAYER_MAX_); i++) {
-      write(channels[i], buffer);
-      buffer.rewind();
-    }
-  }
-
-  private void sendEnemy(int id) {
-    buffer.clear();
-    buffer.put((byte) 1);
-    buffer2.clear();
-    state.serialize(id, buffer, buffer2, false);
-    for (int i = 0; i < properties.get(Properties.PLAYER_MAX_); i++) {
-      write(channels[i], buffer, buffer2);
-      buffer.rewind();
-      buffer2.rewind();
-    }
-  }
-
-  private static void write(WritableByteChannel channel, ByteBuffer buf) {
-    try {
-      while (buf.hasRemaining()) {
-        channel.write(buf);
+      state.serialize(i, false);
+      if (++j > 30) {
+        sendToAll();
+        sendBuffer.clear();
+        sendBuffer.put((byte) 1);
+        j = 0;
       }
-    } catch (IOException e) {
-      throw new RuntimeException(e);
+    }
+    if (j > 0) {
+      sendToAll();
     }
   }
 
-  private static void write(GatheringByteChannel channel, ByteBuffer... bufs) {
-    try {
-      while (bufs[bufs.length - 1].hasRemaining()) {
-        channel.write(bufs);
+  private void sendPlayer(int id) throws IOException {
+    sendBuffer.clear();
+    sendBuffer.put((byte) 0);
+    state.serialize(id, true);
+    sendToAllExcept(id);
+  }
+
+  private void sendEntity(int id) throws IOException {
+    sendBuffer.clear();
+    sendBuffer.put((byte) 2);
+    state.serialize(id);
+    sendToAll();
+  }
+
+  private void sendEnemy(int id) throws IOException {
+    sendBuffer.clear();
+    sendBuffer.put((byte) 1);
+    state.serialize(id, false);
+    sendToAll();
+  }
+
+  private void sendToAll() throws IOException {
+    for (int i = 0; i < properties.get(Properties.PLAYER_MAX_); i++) {
+      serverConnection.sendPacket(i);
+    }
+  }
+
+  private void sendToAllExcept(int j) throws IOException {
+    for (int i = 0; i < properties.get(Properties.PLAYER_MAX_); i++) {
+      if (i == j) {
+        continue;
       }
-    } catch (IOException e) {
-      throw new RuntimeException(e);
+      serverConnection.sendPacket(i);
+    }
+  }
+
+  private void sendToAllExcept(List<Integer> list) throws IOException {
+    for (int i = 0; i < properties.get(Properties.PLAYER_MAX_); i++) {
+      if (list.contains(i)) {
+        continue;
+      }
+      serverConnection.sendPacket(i);
     }
   }
 

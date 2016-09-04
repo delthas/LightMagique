@@ -4,6 +4,7 @@ import java.nio.ByteBuffer;
 
 public class Entity {
 
+  private int entityId;
   private boolean destroyed = true;
   private boolean enemy;
   private boolean moving = true;
@@ -11,6 +12,10 @@ public class Entity {
   private double x, y;
   private double speed, angle;
   private int health;
+
+  public Entity(int entityId) {
+    this.entityId = entityId;
+  }
 
   public void create(double x, double y, double speed, double angle, int hitbox, int health, boolean enemy) {
     destroyed = false;
@@ -54,7 +59,10 @@ public class Entity {
     entity.putDouble(speed);
     entity.putDouble(angle);
     entity.putShort((short) health);
-    entity.flip();
+  }
+
+  int getEntityId() {
+    return entityId;
   }
 
   public boolean isDestroyed() {

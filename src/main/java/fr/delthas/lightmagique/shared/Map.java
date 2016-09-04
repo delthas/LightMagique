@@ -3,6 +3,8 @@ package fr.delthas.lightmagique.shared;
 import java.awt.Color;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
 
 import javax.imageio.ImageIO;
 
@@ -14,8 +16,8 @@ public class Map {
   private int height;
 
   public Map() {
-    try {
-      mapImage = ImageIO.read(Map.class.getResource("/map.png"));
+    try (InputStream is = Files.newInputStream(Utils.getFile("map.png"))) {
+      mapImage = ImageIO.read(is);
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
