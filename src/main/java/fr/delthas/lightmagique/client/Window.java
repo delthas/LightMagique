@@ -718,7 +718,6 @@ class Window {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     window = glfwCreateWindow(width, height, Client.GAME_NAME, glfwGetPrimaryMonitor(), NULL);
-
     glfwIconifyWindow(window);
 
     BufferedImage image;
@@ -737,7 +736,6 @@ class Window {
     glfwSetCursor(window, cursor);
     memFree(cursorIconImage);
 
-    glfwSetWindowTitle(window, Client.GAME_NAME);
 
     try (InputStream is = Files.newInputStream(Utils.getFile("icon.png"))) {
       if (is == null) {
@@ -848,8 +846,8 @@ class Window {
     return height;
   }
 
-  public boolean closeRequested() {
-    return glfwWindowShouldClose(window);
+  public void closeRequested() {
+    glfwWindowShouldClose(window);
   }
 
   public void start(BufferedImage image) {
