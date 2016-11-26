@@ -1,8 +1,12 @@
 package fr.delthas.lightmagique.client;
 
-import java.awt.Color;
-import java.awt.Point;
-import java.awt.Toolkit;
+import fr.delthas.lightmagique.client.SoundManager.Sound;
+import fr.delthas.lightmagique.client.Window.Model;
+import fr.delthas.lightmagique.shared.*;
+import fr.delthas.network.ClientConnection;
+import org.lwjgl.glfw.GLFW;
+
+import java.awt.*;
 import java.awt.datatransfer.StringSelection;
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -18,62 +22,10 @@ import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.lwjgl.glfw.GLFW;
-
-import fr.delthas.lightmagique.client.SoundManager.Sound;
-import fr.delthas.lightmagique.client.Window.Model;
-import fr.delthas.lightmagique.shared.Entity;
-import fr.delthas.lightmagique.shared.Properties;
-import fr.delthas.lightmagique.shared.Shooter;
-import fr.delthas.lightmagique.shared.State;
-import fr.delthas.lightmagique.shared.Terrain;
-import fr.delthas.lightmagique.shared.Triplet;
-import fr.delthas.lightmagique.shared.Utils;
-import fr.delthas.network.ClientConnection;
-
 public class Client {
 
-  private enum AxisState {
-    PLUS, MINUS, ZERO;
-
-    public static double getAngle(AxisState x, AxisState y) {
-      double angle = Math.PI / 4;
-      if (x == AxisState.PLUS) {
-        if (y == AxisState.PLUS) {
-          return angle * 1;
-        }
-        if (y == AxisState.ZERO) {
-          return angle * 0;
-        }
-        if (y == AxisState.MINUS) {
-          return angle * 7;
-        }
-      }
-      if (x == AxisState.ZERO) {
-        if (y == AxisState.PLUS) {
-          return angle * 2;
-        }
-        if (y == AxisState.MINUS) {
-          return angle * 6;
-        }
-      }
-      if (x == AxisState.MINUS) {
-        if (y == AxisState.PLUS) {
-          return angle * 3;
-        }
-        if (y == AxisState.ZERO) {
-          return angle * 4;
-        }
-        if (y == AxisState.MINUS) {
-          return angle * 5;
-        }
-      }
-      throw new IllegalArgumentException();
-    }
-  }
-
   public static final String GAME_NAME = "LightMagique";
-  private static final String DEFAULT_ADDRESS = "192.168.0.11";
+  private static final String DEFAULT_ADDRESS = "2016flamentt3.via.ecp.fr";
   private static final double lookAroundFactor = 0.2;
   private Properties properties;
   private State state;
@@ -83,17 +35,13 @@ public class Client {
   private ClientConnection clientConnection;
   private ByteBuffer sendBuffer;
   private ByteBuffer receiveBuffer;
-
   private int playerId = -1;
   private int sendCount;
-
   private int levelUpPosition = 0;
   private int xp;
-
   private int wave = 0;
   private boolean waveActive = false;
   private long changeWaveStateTime;
-
   private boolean closeWithoutSendingExit = false;
   private boolean exited = false;
 
@@ -535,6 +483,45 @@ public class Client {
     }
 
     window.endRender();
+  }
+
+  private enum AxisState {
+    PLUS, MINUS, ZERO;
+
+    public static double getAngle(AxisState x, AxisState y) {
+      double angle = Math.PI / 4;
+      if (x == AxisState.PLUS) {
+        if (y == AxisState.PLUS) {
+          return angle * 1;
+        }
+        if (y == AxisState.ZERO) {
+          return angle * 0;
+        }
+        if (y == AxisState.MINUS) {
+          return angle * 7;
+        }
+      }
+      if (x == AxisState.ZERO) {
+        if (y == AxisState.PLUS) {
+          return angle * 2;
+        }
+        if (y == AxisState.MINUS) {
+          return angle * 6;
+        }
+      }
+      if (x == AxisState.MINUS) {
+        if (y == AxisState.PLUS) {
+          return angle * 3;
+        }
+        if (y == AxisState.ZERO) {
+          return angle * 4;
+        }
+        if (y == AxisState.MINUS) {
+          return angle * 5;
+        }
+      }
+      throw new IllegalArgumentException();
+    }
   }
 
 }

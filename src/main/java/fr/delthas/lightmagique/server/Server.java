@@ -1,6 +1,9 @@
 package fr.delthas.lightmagique.server;
 
-import java.awt.Toolkit;
+import fr.delthas.lightmagique.shared.*;
+import fr.delthas.network.ServerConnection;
+
+import java.awt.*;
 import java.awt.datatransfer.StringSelection;
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -11,13 +14,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
-
-import fr.delthas.lightmagique.shared.Properties;
-import fr.delthas.lightmagique.shared.Shooter;
-import fr.delthas.lightmagique.shared.State;
-import fr.delthas.lightmagique.shared.Triplet;
-import fr.delthas.lightmagique.shared.Utils;
-import fr.delthas.network.ServerConnection;
 
 public class Server {
 
@@ -37,6 +33,17 @@ public class Server {
   private int ticksSinceLastWave = 0;
 
   private List<Integer> disconnectedClients = new ArrayList<>();
+
+  private Server(Properties properties) {
+    this.properties = properties;
+    serverConnection = new ServerConnection(Properties.PROTOCOL_ID, Properties.TIMEOUT, Properties.PACKET_MAX_SIZE);
+    sendBuffer = serverConnection.getSendBuffer();
+    receiveBuffer = serverConnection.getReceiveBuffer();
+    state = new State(receiveBuffer, sendBuffer);
+    state.initialize(properties);
+    state.getMap().getAndForgetMapImage();
+    Shooter.initialize(properties);
+  }
 
   public static void main(String... args) {
     int port = Properties.DEFAULT_PORT;
@@ -83,17 +90,6 @@ public class Server {
     }
   }
 
-  private Server(Properties properties) {
-    this.properties = properties;
-    serverConnection = new ServerConnection(Properties.PROTOCOL_ID, Properties.TIMEOUT, Properties.PACKET_MAX_SIZE);
-    sendBuffer = serverConnection.getSendBuffer();
-    receiveBuffer = serverConnection.getReceiveBuffer();
-    state = new State(receiveBuffer, sendBuffer);
-    state.initialize(properties);
-    state.getMap().getAndForgetMapImage();
-    Shooter.initialize(properties);
-  }
-
   private void start(int port) throws IOException {
     serverConnection.start(port);
     for (int i = 0; i < properties.get(Properties.PLAYER_MAX_); i++) {
@@ -135,7 +131,6 @@ public class Server {
       sendBuffer.put(player ? (byte) 10 : (byte) 11).putShort(id.shortValue()).putShort(damage.shortValue());
       sendToAll();
     });
-    System.out.println("Donc ça a démarré là ^^ ");
     loop();
     sendBuffer.clear();
     sendBuffer.put((byte) 7);
