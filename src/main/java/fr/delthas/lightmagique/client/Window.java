@@ -1,21 +1,19 @@
 package fr.delthas.lightmagique.client;
 
-import static org.lwjgl.glfw.GLFW.*;
-import static org.lwjgl.opengl.GL11.*;
-import static org.lwjgl.opengl.GL12.*;
-import static org.lwjgl.opengl.GL13.*;
-import static org.lwjgl.opengl.GL14.*;
-import static org.lwjgl.opengl.GL15.*;
-import static org.lwjgl.opengl.GL20.*;
-import static org.lwjgl.opengl.GL21.*;
-import static org.lwjgl.opengl.GL30.*;
-import static org.lwjgl.opengl.GL31.*;
-import static org.lwjgl.opengl.GL32.*;
-import static org.lwjgl.opengl.GL33.*;
-import static org.lwjgl.system.MemoryUtil.*;
-import static org.lwjgl.system.MemoryStack.*;
+import fr.delthas.lightmagique.shared.Shooter;
+import fr.delthas.lightmagique.shared.Utils;
+import org.joml.Matrix3f;
+import org.joml.Matrix4f;
+import org.joml.Vector3f;
+import org.joml.Vector4f;
+import org.lwjgl.glfw.*;
+import org.lwjgl.opengl.GL;
+import org.lwjgl.system.Configuration;
+import org.lwjgl.system.MemoryStack;
+import org.lwjgl.system.MemoryUtil;
 
-import java.awt.Color;
+import javax.imageio.ImageIO;
+import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.awt.image.ColorModel;
 import java.awt.image.DataBuffer;
@@ -29,38 +27,22 @@ import java.nio.FloatBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.Collections;
-import java.util.EnumMap;
-import java.util.HashSet;
-import java.util.LinkedList;
+import java.util.*;
 import java.util.List;
-import java.util.Set;
 import java.util.zip.ZipInputStream;
 
-import javax.imageio.ImageIO;
-
-import org.joml.Matrix3f;
-import org.joml.Matrix4f;
-import org.joml.Vector3f;
-import org.joml.Vector4f;
-import org.lwjgl.BufferUtils;
-import org.lwjgl.glfw.GLFWCursorPosCallback;
-import org.lwjgl.glfw.GLFWErrorCallback;
-import org.lwjgl.glfw.GLFWImage;
-import org.lwjgl.glfw.GLFWKeyCallback;
-import org.lwjgl.glfw.GLFWMouseButtonCallback;
-import org.lwjgl.glfw.GLFWScrollCallback;
-import org.lwjgl.glfw.GLFWScrollCallbackI;
-import org.lwjgl.glfw.GLFWVidMode;
-import org.lwjgl.opengl.GL;
-import org.lwjgl.opengl.GLDebugMessageCallback;
-import org.lwjgl.system.Configuration;
-import org.lwjgl.system.MemoryStack;
-import org.lwjgl.system.MemoryUtil;
-
-import fr.delthas.lightmagique.shared.Shooter;
-import fr.delthas.lightmagique.shared.Utils;
+import static org.lwjgl.glfw.GLFW.*;
+import static org.lwjgl.opengl.GL11.*;
+import static org.lwjgl.opengl.GL12.GL_TEXTURE_BASE_LEVEL;
+import static org.lwjgl.opengl.GL12.GL_TEXTURE_MAX_LEVEL;
+import static org.lwjgl.opengl.GL15.*;
+import static org.lwjgl.opengl.GL20.*;
+import static org.lwjgl.opengl.GL30.*;
+import static org.lwjgl.opengl.GL31.*;
+import static org.lwjgl.opengl.GL32.GL_DEPTH_CLAMP;
+import static org.lwjgl.opengl.GL33.*;
+import static org.lwjgl.system.MemoryStack.stackPush;
+import static org.lwjgl.system.MemoryUtil.*;
 
 // import static org.lwjgl.glfw.GLFW.*;
 // import static org.lwjgl.opengl.GL11.*;
@@ -79,39 +61,9 @@ import fr.delthas.lightmagique.shared.Utils;
 
 @SuppressWarnings({"unused", "static-method"})
 class Window {
-
-  public enum Model {
-    PLAYER("player"), MONSTER("monster"), BALL("ball"), SMALL_BALL("smallball");
-
-    private String modelFile;
-
-    private Model(String modelFile) {
-      this.modelFile = modelFile;
-    }
-  }
-
-  private static class Mesh {
-    public final int buffer;
-    public final int vertices;
-
-    public Mesh(int buffer, int vertices) {
-      this.buffer = buffer;
-      this.vertices = vertices;
-    }
-  }
-
-  private static class Texture {
-    public final int texture;
-    public final int width;
-    public final int height;
-
-    public Texture(int texture, int width, int height) {
-      this.texture = texture;
-      this.width = width;
-      this.height = height;
-    }
-  }
-
+  private static final int maxNumberOfLights = 1000;
+  private static final float cameraAngle = 0;
+  private static final float cameraDistance = 5000;
   private boolean compatibility = false;
   private long window;
   private GLFWKeyCallback keyCallback;
@@ -127,23 +79,15 @@ class Window {
   private int backgroundBuffer, texture;
   private int rawBuffer;
   private int program, textureProgram, rawProgram;
-
-  private static final int maxNumberOfLights = 1000;
-  private static final float cameraAngle = 0;
-  private static final float cameraDistance = 5000;
   private float cameraX = 0, cameraY = 0;
-
   private Mesh[] meshes = new Mesh[Model.values().length];
-
   private Set<Integer> keysState = new HashSet<>(20);
   private Set<Integer> mouseState = new HashSet<>(3);
   private Set<Integer> newKeys = new HashSet<>(2);
   private Set<Integer> newMouse = new HashSet<>(3);
   private double mouseX, mouseY;
   private int scroll = 0;
-
   private int width, height;
-
   private List<RenderEntity> entities;
   private List<Light> lights;
   private int[] levels = null;
@@ -151,41 +95,129 @@ class Window {
   private int level;
   private int wave = -1;
   private boolean waveEnd;
-
   private Texture levelBackground;
   private Texture[] levelsTextures = new Texture[Shooter.LEVELS_AMOUNT];
   private Texture levelPointTexture;
   private Texture levelCursorTexture;
-
   private Texture cooldownBallTexture;
   private Texture cooldownPowerBallTexture;
   private Texture cooldownChargeBallTexture;
   private Texture cooldownDashTexture;
-
   private Texture freezeTexture;
   private Texture healthTexture;
-
   private Texture waveStartTexture;
   private Texture waveEndTexture;
   private Texture[] digitTextures = new Texture[10];
-
   private float cooldownBall = Float.NaN;
   private float cooldownPowerBall;
   private boolean chargingPowerBall;
   private float cooldownDash;
-
   private float health = Float.NaN;
   private boolean isHealth = true;
-
   private int start0, end0 = -1;
-
   // Reuse buffers to reduce RAM usage
   private FloatBuffer bufferMat4x4;
   private ByteBuffer bufferLights;
-
   private List<Integer> texturesIndexes = new LinkedList<>();
-
   private boolean hasMaximized = false;
+
+  public Window() throws IOException {
+    initGLFW();
+    initGL();
+    initPrograms();
+    initUniforms();
+    initBuffers();
+  }
+
+  private static Matrix4f calcLookAt(float x, float y) {
+    Vector3f eye = new Vector3f(x, (float) (y - cameraDistance * Math.sin(cameraAngle)), (float) (cameraDistance * Math.cos(cameraAngle)));
+    Vector3f center = new Vector3f(x, y, 0);
+    Vector3f temp = new Vector3f(1, 0, 0);
+    temp.cross(eye.sub(center, new Vector3f())).negate();
+    Matrix4f v = new Matrix4f().setLookAt(eye, center, temp);
+    return v;
+  }
+
+  private static String readFile(String name) {
+    try (BufferedReader reader = Files.newBufferedReader(Utils.getFile(name))) {
+      StringBuilder file = new StringBuilder();
+      String line;
+      while ((line = reader.readLine()) != null) {
+        file.append(line + "\n");
+      }
+      return file.toString();
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  private static ByteBuffer readImage(BufferedImage image, boolean alpha, boolean inverted) {
+    // extract the pixel colors from the image and put it in a buffer for opengl
+    // heavy optimization to avoid allocating 3 times the size of an image
+    // based on BufferedImage#getRGB
+
+    int imageHeight = image.getHeight();
+    int imageWidth = image.getWidth();
+    ByteBuffer buffer = MemoryUtil.memAlloc(imageWidth * imageHeight * (alpha ? 4 : 3));
+    Raster raster = image.getRaster();
+    int nbands = raster.getNumBands();
+    int dataType = raster.getDataBuffer().getDataType();
+    Object data;
+    ColorModel colorModel = image.getColorModel();
+    switch (dataType) {
+      case DataBuffer.TYPE_BYTE:
+        data = new byte[nbands];
+        break;
+      case DataBuffer.TYPE_USHORT:
+        data = new short[nbands];
+        break;
+      case DataBuffer.TYPE_INT:
+        data = new int[nbands];
+        break;
+      case DataBuffer.TYPE_FLOAT:
+        data = new float[nbands];
+        break;
+      case DataBuffer.TYPE_DOUBLE:
+        data = new double[nbands];
+        break;
+      default:
+        throw new IllegalArgumentException("Unknown data buffer type: " + dataType);
+    }
+    for (int y = 0; y < imageHeight; y++) {
+      for (int x = 0; x < imageWidth; x++) {
+        if (inverted) {
+          raster.getDataElements(x, imageHeight - 1 - y, data);
+        } else {
+          raster.getDataElements(x, y, data);
+        }
+        buffer.put((byte) colorModel.getRed(data));
+        buffer.put((byte) colorModel.getGreen(data));
+        buffer.put((byte) colorModel.getBlue(data));
+        if (alpha) {
+          buffer.put((byte) colorModel.getAlpha(data));
+        }
+      }
+    }
+
+    buffer.flip();
+
+    return buffer;
+  }
+
+  private static int[] getDigits(int a) {
+    int[] digits = new int[10];
+    int i = a;
+    int j = 0;
+    while (i != 0) {
+      digits[j++] = i % 10;
+      i /= 10;
+    }
+    int[] ndigits = new int[j];
+    for (int k = 0; k < j; k++) {
+      ndigits[j - k - 1] = digits[k];
+    }
+    return ndigits;
+  }
 
   public void renderLight(Light light) {
     lights.add(light);
@@ -260,7 +292,7 @@ class Window {
       Vector4f lightCameraPosition = calcLookAt(cameraX, cameraY).transform(new Vector4f(light.x, light.y, 150, 1));
       bufferLights.putFloat(lightCameraPosition.x).putFloat(lightCameraPosition.y).putFloat(lightCameraPosition.z).putFloat(lightCameraPosition.w);
       bufferLights.putFloat(light.color.getRed() / 256f).putFloat(light.color.getGreen() / 256f).putFloat(light.color.getBlue() / 256f)
-          .putFloat(1.0f);
+              .putFloat(1.0f);
       bufferLights.putFloat(light.x).putFloat(light.y);
       bufferLights.putFloat(0).putFloat(0); // padding
     }
@@ -303,7 +335,7 @@ class Window {
     for (RenderEntity entity : entities) {
       Mesh mesh = meshes[entity.model.ordinal()];
       Matrix4f m = new Matrix4f().translate(entity.x, entity.y, 0).rotateX((float) (-Math.PI / 6)).rotateZ(entity.angle + (float) Math.PI / 2)
-          .scale(entity.scale);
+              .scale(entity.scale);
       Matrix4f vm = v.mul(m, new Matrix4f());
       Matrix3f vmNormal = new Matrix3f(vm);
       bufferMat4x4.clear();
@@ -391,7 +423,7 @@ class Window {
         bufferMat4x4.clear();
         y -= levelsTextures[i].height / 2;
         matrix.translation(-1, -1, 0).scale(2f / width, 2f / height, 1).translate(150, y, 0)
-            .scale(levelsTextures[i].width, levelsTextures[i].height, 1).translate(-0.5f, -0.5f, 0);
+                .scale(levelsTextures[i].width, levelsTextures[i].height, 1).translate(-0.5f, -0.5f, 0);
         glUniformMatrix4fv(indexRawMatrix, false, matrix.get(bufferMat4x4));
         glUniform2f(indexImageSize, levelsTextures[i].width, levelsTextures[i].height);
         glDrawArrays(GL_TRIANGLES, 0, 6);
@@ -400,7 +432,7 @@ class Window {
         for (int j = 0; j < levels[i]; j++) {
           bufferMat4x4.clear();
           matrix.translation(-1, -1, 0).scale(2f / width, 2f / height, 1).translate(250 + j * levelPointTexture.width, y, 0)
-              .scale(levelPointTexture.width, levelPointTexture.height, 1).translate(-0.5f, -0.5f, 0);
+                  .scale(levelPointTexture.width, levelPointTexture.height, 1).translate(-0.5f, -0.5f, 0);
           glUniformMatrix4fv(indexRawMatrix, false, matrix.get(bufferMat4x4));
           glDrawArrays(GL_TRIANGLES, 0, 6);
         }
@@ -409,7 +441,7 @@ class Window {
           glUniform2f(indexImageSize, levelCursorTexture.width, levelCursorTexture.height);
           bufferMat4x4.clear();
           matrix.translation(-1, -1, 0).scale(2f / width, 2f / height, 1).translate(50, y, 0)
-              .scale(levelCursorTexture.width, levelCursorTexture.height, 1).translate(-0.5f, -0.5f, 0);
+                  .scale(levelCursorTexture.width, levelCursorTexture.height, 1).translate(-0.5f, -0.5f, 0);
           glUniformMatrix4fv(indexRawMatrix, false, matrix.get(bufferMat4x4));
           glDrawArrays(GL_TRIANGLES, 0, 6);
         }
@@ -423,8 +455,8 @@ class Window {
       for (int i = 0; i < level; i++) {
         bufferMat4x4.clear();
         matrix.translation(-1, -1, 0).scale(2f / width, 2f / height, 1)
-            .translate(190 + i % 20 * levelPointTexture.width, y - i / 20 * levelPointTexture.height, 0)
-            .scale(levelPointTexture.width, levelPointTexture.height, 1).translate(-0.5f, -0.5f, 0);
+                .translate(190 + i % 20 * levelPointTexture.width, y - i / 20 * levelPointTexture.height, 0)
+                .scale(levelPointTexture.width, levelPointTexture.height, 1).translate(-0.5f, -0.5f, 0);
         glUniformMatrix4fv(indexRawMatrix, false, matrix.get(bufferMat4x4));
         glDrawArrays(GL_TRIANGLES, 0, 6);
       }
@@ -459,7 +491,7 @@ class Window {
         glUniform2f(indexImageSize, digitTexture.width, digitTexture.height);
         bufferMat4x4.clear();
         matrix.scaling(2f / width, 2f / height, 1).translate(x, -waveTexture.height * 0.6f, 0).scale(digitTexture.width, digitTexture.height, 1)
-            .translate(0, -0.5f, 0);
+                .translate(0, -0.5f, 0);
         glUniformMatrix4fv(indexRawMatrix, false, matrix.get(bufferMat4x4));
         glDrawArrays(GL_TRIANGLES, 0, 6);
         x += digitTexture.width;
@@ -834,8 +866,8 @@ class Window {
     return scroll;
   }
 
-  public java.awt.Point.Double getMouse() {
-    return new java.awt.Point.Double(mouseX, height - mouseY);
+  public Point.Double getMouse() {
+    return new Point.Double(mouseX, height - mouseY);
   }
 
   public int getWidth() {
@@ -876,14 +908,6 @@ class Window {
     glBindVertexArray(vao);
   }
 
-  public Window() throws IOException {
-    initGLFW();
-    initGL();
-    initPrograms();
-    initUniforms();
-    initBuffers();
-  }
-
   public void exit() {
     glDeleteBuffers(backgroundBuffer);
     for (Mesh mesh : meshes) {
@@ -904,15 +928,6 @@ class Window {
     memFree(bufferLights);
     glfwDestroyWindow(window);
     glfwTerminate();
-  }
-
-  private static Matrix4f calcLookAt(float x, float y) {
-    Vector3f eye = new Vector3f(x, (float) (y - cameraDistance * Math.sin(cameraAngle)), (float) (cameraDistance * Math.cos(cameraAngle)));
-    Vector3f center = new Vector3f(x, y, 0);
-    Vector3f temp = new Vector3f(1, 0, 0);
-    temp.cross(eye.sub(center, new Vector3f())).negate();
-    Matrix4f v = new Matrix4f().setLookAt(eye, center, temp);
-    return v;
   }
 
   @SuppressWarnings("null")
@@ -980,85 +995,35 @@ class Window {
     meshes[model.ordinal()] = new Mesh(indexBuffer, bufferLength / 9);
   }
 
-  private static String readFile(String name) {
-    try (BufferedReader reader = Files.newBufferedReader(Utils.getFile(name))) {
-      StringBuilder file = new StringBuilder();
-      String line;
-      while ((line = reader.readLine()) != null) {
-        file.append(line + "\n");
-      }
-      return file.toString();
-    } catch (IOException e) {
-      throw new RuntimeException(e);
+  public enum Model {
+    PLAYER("player"), MONSTER("monster"), BALL("ball"), SMALL_BALL("smallball");
+    private String modelFile;
+
+    Model(String modelFile) {
+      this.modelFile = modelFile;
     }
   }
 
-  private static ByteBuffer readImage(BufferedImage image, boolean alpha, boolean inverted) {
-    // extract the pixel colors from the image and put it in a buffer for opengl
-    // heavy optimization to avoid allocating 3 times the size of an image
-    // based on BufferedImage#getRGB
+  private static class Mesh {
+    public final int buffer;
+    public final int vertices;
 
-    int imageHeight = image.getHeight();
-    int imageWidth = image.getWidth();
-    ByteBuffer buffer = MemoryUtil.memAlloc(imageWidth * imageHeight * (alpha ? 4 : 3));
-    Raster raster = image.getRaster();
-    int nbands = raster.getNumBands();
-    int dataType = raster.getDataBuffer().getDataType();
-    Object data;
-    ColorModel colorModel = image.getColorModel();
-    switch (dataType) {
-      case DataBuffer.TYPE_BYTE:
-        data = new byte[nbands];
-        break;
-      case DataBuffer.TYPE_USHORT:
-        data = new short[nbands];
-        break;
-      case DataBuffer.TYPE_INT:
-        data = new int[nbands];
-        break;
-      case DataBuffer.TYPE_FLOAT:
-        data = new float[nbands];
-        break;
-      case DataBuffer.TYPE_DOUBLE:
-        data = new double[nbands];
-        break;
-      default:
-        throw new IllegalArgumentException("Unknown data buffer type: " + dataType);
+    public Mesh(int buffer, int vertices) {
+      this.buffer = buffer;
+      this.vertices = vertices;
     }
-    for (int y = 0; y < imageHeight; y++) {
-      for (int x = 0; x < imageWidth; x++) {
-        if (inverted) {
-          raster.getDataElements(x, imageHeight - 1 - y, data);
-        } else {
-          raster.getDataElements(x, y, data);
-        }
-        buffer.put((byte) colorModel.getRed(data));
-        buffer.put((byte) colorModel.getGreen(data));
-        buffer.put((byte) colorModel.getBlue(data));
-        if (alpha) {
-          buffer.put((byte) colorModel.getAlpha(data));
-        }
-      }
-    }
-
-    buffer.flip();
-
-    return buffer;
   }
 
-  private static int[] getDigits(int a) {
-    int[] digits = new int[10];
-    int i = a;
-    int j = 0;
-    while (i != 0) {
-      digits[j++] = i % 10;
-      i /= 10;
+  private static class Texture {
+    public final int texture;
+    public final int width;
+    public final int height;
+
+    public Texture(int texture, int width, int height) {
+      this.texture = texture;
+      this.width = width;
+      this.height = height;
     }
-    int[] ndigits = new int[j];
-    for (int k = 0; k < j; k++) {
-      ndigits[j - k - 1] = digits[k];
-    }
-    return ndigits;
   }
 
 }

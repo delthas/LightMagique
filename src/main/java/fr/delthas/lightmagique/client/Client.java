@@ -90,10 +90,10 @@ public class Client {
     try {
       if (address == null) {
         throw new IOException("No valid IP or hostname found in the default or in the eventually passed arguments. "
-            + "Try checking your connection if you're connecting to a remote server.");
+                + "Try checking your connection if you're connecting to a remote server.");
       }
       InetSocketAddress socket = new InetSocketAddress(address, port);
-      System.out.println("Starting client on address: " + address.toString() + " port:" + port);
+      System.out.println("Starting client on address: " + address + " port:" + port);
       new Client().start(socket);
     } catch (Exception e) {
       System.err.println("An exception has occured. This stack trace has been copied to your clipboard.");
@@ -210,14 +210,14 @@ public class Client {
         case 4:
           xp += properties.get(Properties.XP_PER_HIT_);
           state.getPlayer(playerId)
-              .increaseHealth((int) (0.07 * state.getPlayer(playerId).getHealth() / state.getPlayer(playerId).getHealthPercent()));
+                  .increaseHealth((int) (0.07 * state.getPlayer(playerId).getHealth() / state.getPlayer(playerId).getHealthPercent()));
           break;
         case 5:
           waveActive = true;
           wave = receiveBuffer.getShort();
           changeWaveStateTime = System.nanoTime();
           state.getPlayer(playerId)
-              .increaseHealth((int) (0.5 * state.getPlayer(playerId).getHealth() / state.getPlayer(playerId).getHealthPercent()));
+                  .increaseHealth((int) (0.5 * state.getPlayer(playerId).getHealth() / state.getPlayer(playerId).getHealthPercent()));
           break;
         case 6:
           waveActive = false;
@@ -265,7 +265,6 @@ public class Client {
 
   /**
    * @return true si l'utilisateur veut quit
-   *
    */
   private boolean input() throws IOException {
     window.pollInput();
@@ -306,7 +305,7 @@ public class Client {
         Point.Double mousePosition = window.getMouse();
         double ballAngle = Math.atan2(mousePosition.y - screenHeight / 2.0, mousePosition.x - screenWidth / 2.0);
         state.getEntity(freeId).create(player.getX(), player.getY(), ballSpecs.getFirst(), ballAngle, ballSpecs.getThird(), ballSpecs.getSecond(),
-            false);
+                false);
         soundManager.playSound(Sound.BALL_LAUNCH);
         sendBuffer.put((byte) 8);
         clientConnection.sendPacket();
@@ -322,7 +321,7 @@ public class Client {
         Point.Double mousePosition = window.getMouse();
         double ballAngle = Math.atan2(mousePosition.y - screenHeight / 2.0, mousePosition.x - screenWidth / 2.0);
         state.getEntity(freeId).create(player.getX(), player.getY(), ballSpecs.getFirst(), ballAngle, ballSpecs.getThird(), ballSpecs.getSecond(),
-            false);
+                false);
         soundManager.playSound(Sound.BALL_LAUNCH);
         sendBuffer.put((byte) 8);
         clientConnection.sendPacket();
@@ -388,7 +387,7 @@ public class Client {
     window.beginRender(minX + screenWidth / 2f, minY + screenHeight / 2f);
     soundManager.updateListener(minX + screenWidth / 2f, minY + screenHeight / 2f);
 
-    Consumer<Entity> draw = (entity) -> {
+    Consumer<Entity> draw = entity -> {
       if (entity.isDestroyed()) {
         return;
       }
@@ -447,7 +446,7 @@ public class Client {
         if (!entity.isEnemy())
           window.renderLight(new Light(color, x, y));
         window.renderEntity(
-            new RenderEntity(entity.getHitbox() == properties.get(Properties.BALL_HITBOX_) ? Model.SMALL_BALL : Model.BALL, x, y, angle, scale));
+                new RenderEntity(entity.getHitbox() == properties.get(Properties.BALL_HITBOX_) ? Model.SMALL_BALL : Model.BALL, x, y, angle, scale));
       }
     };
 
@@ -490,33 +489,33 @@ public class Client {
 
     public static double getAngle(AxisState x, AxisState y) {
       double angle = Math.PI / 4;
-      if (x == AxisState.PLUS) {
-        if (y == AxisState.PLUS) {
+      if (x == PLUS) {
+        if (y == PLUS) {
           return angle * 1;
         }
-        if (y == AxisState.ZERO) {
+        if (y == ZERO) {
           return angle * 0;
         }
-        if (y == AxisState.MINUS) {
+        if (y == MINUS) {
           return angle * 7;
         }
       }
-      if (x == AxisState.ZERO) {
-        if (y == AxisState.PLUS) {
+      if (x == ZERO) {
+        if (y == PLUS) {
           return angle * 2;
         }
-        if (y == AxisState.MINUS) {
+        if (y == MINUS) {
           return angle * 6;
         }
       }
-      if (x == AxisState.MINUS) {
-        if (y == AxisState.PLUS) {
+      if (x == MINUS) {
+        if (y == PLUS) {
           return angle * 3;
         }
-        if (y == AxisState.ZERO) {
+        if (y == ZERO) {
           return angle * 4;
         }
-        if (y == AxisState.MINUS) {
+        if (y == MINUS) {
           return angle * 5;
         }
       }

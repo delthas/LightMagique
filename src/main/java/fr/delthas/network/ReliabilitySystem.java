@@ -25,6 +25,18 @@ abstract class ReliabilitySystem {
     reset();
   }
 
+  private static final int bitIndexForSequence(int sequence, int ack, int maxSequence) {
+    if (sequence > ack) {
+      return ack + maxSequence - sequence;
+    } else {
+      return ack - 1 - sequence;
+    }
+  }
+
+  private static boolean sequenceMoreRecent(int s1, int s2, int max) {
+    return s1 > s2 && s1 - s2 <= max / 2 || s2 > s1 && s2 - s1 > max / 2;
+  }
+
   public void reset() {
     localSequence = 0;
     remoteSequence = 0;
@@ -91,7 +103,7 @@ abstract class ReliabilitySystem {
       } else if (!sequenceMoreRecent(data.sequence, ack, maxSequence)) {
         int bitIndex = bitIndexForSequence(data.sequence, ack, maxSequence);
         if (bitIndex <= 31) {
-          acked = (ackBits >> bitIndex & 1) == 1 ? true : false;
+          acked = (ackBits >> bitIndex & 1) == 1;
         }
       }
       if (acked) {
@@ -105,14 +117,6 @@ abstract class ReliabilitySystem {
   public void update(float deltaTime) throws IOException {
     advanceQueueTime(deltaTime);
     updateQueues();
-  }
-
-  private static final int bitIndexForSequence(int sequence, int ack, int maxSequence) {
-    if (sequence > ack) {
-      return ack + maxSequence - sequence;
-    } else {
-      return ack - 1 - sequence;
-    }
   }
 
   private void advanceQueueTime(float deltaTime) {
@@ -167,10 +171,6 @@ abstract class ReliabilitySystem {
 
   public int getRemoteSequence() {
     return remoteSequence;
-  }
-
-  private static boolean sequenceMoreRecent(int s1, int s2, int max) {
-    return (s1 > s2) && (s1 - s2 <= max / 2) || (s2 > s1) && (s2 - s1 > max / 2);
   }
 
 }

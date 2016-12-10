@@ -1,6 +1,6 @@
 package fr.delthas.lightmagique.client;
 
-import java.awt.Color;
+import java.awt.*;
 
 public class Light {
 
@@ -13,7 +13,6 @@ public class Light {
     this.x = x;
     this.y = y;
   }
-
 
 
 }

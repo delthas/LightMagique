@@ -8,31 +8,35 @@ public class State {
 
   // TODO tout remplacer avec getEntityd
 
-  public interface ConsumerIOException<T> {
-    void accept(T t) throws IOException;
-  }
-
-  public interface TriConsumerIOException<T, U, V> {
-    void accept(T t, U u, V v) throws IOException;
-  }
-
   private Map map = new Map();
   private Properties properties;
   private Shooter[] players;
   private Shooter[] enemies;
   private Entity[] entities;
-
   private ConsumerIOException<Integer> destroyEntityListener = null;
   private ConsumerIOException<Integer> destroyEnemyListener = null;
   private ConsumerIOException<Void> playerKilledEnemyListener = null;
   private TriConsumerIOException<Boolean, Integer, Integer> hurtListener = null;
-
   private ByteBuffer receiveBuffer;
   private ByteBuffer sendBuffer;
 
   public State(ByteBuffer receiveBuffer, ByteBuffer sendBuffer) {
     this.receiveBuffer = receiveBuffer;
     this.sendBuffer = sendBuffer;
+  }
+
+  private static boolean connects(double x1, double y1, double x2, double y2, double radius) {
+    return (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1) <= radius * radius;
+  }
+
+  public static double distanceSq(Entity e1, Entity e2) {
+    return distanceSq(e1.getX(), e1.getY(), e2.getX(), e2.getY());
+  }
+
+  public static double distanceSq(double x1, double y1, double x2, double y2) {
+    double deltaX = x1 - x2;
+    double deltaY = y1 - y2;
+    return deltaX * deltaX + deltaY * deltaY;
   }
 
   public void initialize(Properties properties) {
@@ -196,7 +200,7 @@ public class State {
   public int getFreeEntityId(boolean personal) {
     if (personal) {
       for (int i = properties.get(Properties.ENTITIES_MAX_) - properties.get(Properties.ENTITIES_PERSONAL_SPACE_SIZE_); i < properties
-          .get(Properties.ENTITIES_MAX_); i++) {
+              .get(Properties.ENTITIES_MAX_); i++) {
         if (entities[i].isDestroyed()) {
           return i;
         }
@@ -215,20 +219,6 @@ public class State {
     Entity temp = entities[id1];
     entities[id1] = entities[id2];
     entities[id2] = temp;
-  }
-
-  private static boolean connects(double x1, double y1, double x2, double y2, double radius) {
-    return (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1) <= radius * radius;
-  }
-
-  public static double distanceSq(Entity e1, Entity e2) {
-    return distanceSq(e1.getX(), e1.getY(), e2.getX(), e2.getY());
-  }
-
-  public static double distanceSq(double x1, double y1, double x2, double y2) {
-    double deltaX = x1 - x2;
-    double deltaY = y1 - y2;
-    return deltaX * deltaX + deltaY * deltaY;
   }
 
   public void setDestroyEnemyListener(ConsumerIOException<Integer> destroyEnemyListener) {
@@ -251,12 +241,12 @@ public class State {
     double nx = entity.getX() + entity.getSpeed() * Math.cos(entity.getAngle() + angleOffset);
     double ny = entity.getY() + entity.getSpeed() * Math.sin(entity.getAngle() + angleOffset);
     Terrain terrain = map.getTerrain((int) nx, (int) ny);
-    if ((entity instanceof Shooter) && terrain.playerThrough) {
+    if (entity instanceof Shooter && terrain.playerThrough) {
       double distance = (properties.get(Properties.ENEMY_HITBOX_)
-          + (entity.isEnemy() ? properties.get(Properties.ENEMY_HITBOX_) : properties.get(Properties.PLAYER_HITBOX_))) / 100;
+              + properties.get(entity.isEnemy() ? Properties.ENEMY_HITBOX_ : Properties.PLAYER_HITBOX_)) / 100;
       distance *= distance;
       for (Shooter other : enemies) {
-        if (other.isDestroyed() || (entity.isEnemy() && entity.getEntityId() == other.getEntityId()))
+        if (other.isDestroyed() || entity.isEnemy() && entity.getEntityId() == other.getEntityId())
           continue;
         double afterDistance = distanceSq(nx, ny, other.getX(), other.getY());
         if (afterDistance <= distance) {
@@ -267,10 +257,10 @@ public class State {
         }
       }
       distance = (properties.get(Properties.PLAYER_HITBOX_)
-          + (entity.isEnemy() ? properties.get(Properties.ENEMY_HITBOX_) : properties.get(Properties.PLAYER_HITBOX_))) / 100;
+              + properties.get(entity.isEnemy() ? Properties.ENEMY_HITBOX_ : Properties.PLAYER_HITBOX_)) / 100;
       distance *= distance;
       for (Shooter other : players) {
-        if (other.isDestroyed() || (!entity.isEnemy() && entity.getEntityId() == other.getEntityId()))
+        if (other.isDestroyed() || !entity.isEnemy() && entity.getEntityId() == other.getEntityId())
           continue;
         double afterDistance = distanceSq(nx, ny, other.getX(), other.getY());
         if (afterDistance <= distance) {
@@ -327,5 +317,13 @@ public class State {
       }
     }
     return Optional.empty();
+  }
+
+  public interface ConsumerIOException<T> {
+    void accept(T t) throws IOException;
+  }
+
+  public interface TriConsumerIOException<T, U, V> {
+    void accept(T t, U u, V v) throws IOException;
   }
 }

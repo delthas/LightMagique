@@ -17,18 +17,10 @@ public class Properties {
   public static final byte PROTOCOL_ID = (byte) 0xCC;
   public static final int PACKET_MAX_SIZE = 1500 - 20 - 8 - 9;
   public static final float TIMEOUT = 30f; // seconds
-
-  private static final String[] PROPERTIES_NAMES = {"playerMax", "enemiesMax", "entitiesMax", "entitiesPersonalSize", "sendStateInterval", "maxLevel",
-      "xpPerHit", "playerHitbox", "enemyHitbox", "ballHitbox", "startXp", "playerCollisionBox", "enemyCollisionBox"};
-  private static final int[] PROPERTIES_DEFAULTS = {2, 200, 1500, 50, 3, 50, 3, 30 * 100, 30 * 100, 10 * 100, 5, 5 * 100, 8 * 100};
-
-  public static final int PROPERTIES_MESSAGE_LENGTH = 4 * PROPERTIES_DEFAULTS.length;
-
-  // variables ending with a _ are indexes for properties
-
   public static final int PLAYER_MAX_ = 0;
   public static final int ENEMIES_MAX_ = 1;
   public static final int ENTITIES_MAX_ = 2;
+  // variables ending with a _ are indexes for properties
   public static final int ENTITIES_PERSONAL_SPACE_SIZE_ = 3;
   public static final int STATE_SEND_INTERVAL_ = 4;
   public static final int MAX_LEVEL_ = 5;
@@ -39,9 +31,12 @@ public class Properties {
   public static final int START_XP_ = 10;
   public static final int PLAYER_COLLISION_BOX = 11;
   public static final int ENEMY_COLLISION_BOX = 12;
-
-
+  private static final String[] PROPERTIES_NAMES = {"playerMax", "enemiesMax", "entitiesMax", "entitiesPersonalSize", "sendStateInterval", "maxLevel",
+          "xpPerHit", "playerHitbox", "enemyHitbox", "ballHitbox", "startXp", "playerCollisionBox", "enemyCollisionBox"};
+  private static final int[] PROPERTIES_DEFAULTS = {2, 200, 1500, 50, 3, 50, 3, 30 * 100, 30 * 100, 10 * 100, 5, 5 * 100, 8 * 100};
+  public static final int PROPERTIES_MESSAGE_LENGTH = 4 * PROPERTIES_DEFAULTS.length;
   private int[] properties = new int[PROPERTIES_NAMES.length];
+
   {
     for (int i = 0; i < PROPERTIES_NAMES.length; i++) {
       properties[i] = PROPERTIES_DEFAULTS[i];
@@ -70,19 +65,9 @@ public class Properties {
     }
   }
 
-  public int get(int propertyIndex) {
-    return properties[propertyIndex];
-  }
-
   public Properties(ByteBuffer buffer) {
     for (int i = 0; i < properties.length; i++) {
       properties[i] = buffer.getInt();
-    }
-  }
-
-  public void serialize(ByteBuffer buffer) {
-    for (int property : properties) {
-      buffer.putInt(property);
     }
   }
 
@@ -95,6 +80,16 @@ public class Properties {
     }
     try (Writer w = Files.newBufferedWriter(propertiesFile, StandardCharsets.UTF_8)) {
       defaultProperties.store(w, "Properties file for the light-magique server.");
+    }
+  }
+
+  public int get(int propertyIndex) {
+    return properties[propertyIndex];
+  }
+
+  public void serialize(ByteBuffer buffer) {
+    for (int property : properties) {
+      buffer.putInt(property);
     }
   }
 

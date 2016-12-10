@@ -35,6 +35,7 @@ public class ServerConnection {
   private int ackedPacketsClosedConnections = 0;
   private int saveIndex = -1;
   private ByteBuffer[] saves = new ByteBuffer[10];
+
   public ServerConnection(byte protocolId, float timeout, int packetMaxSize) {
     this.protocolId = protocolId;
     this.timeout = timeout;

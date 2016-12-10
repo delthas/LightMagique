@@ -69,12 +69,12 @@ public class Entity {
     return destroyed;
   }
 
-  public void destroy() {
-    destroyed = true;
-  }
-
   void setDestroyed(boolean destroyed) {
     this.destroyed = destroyed;
+  }
+
+  public void destroy() {
+    destroyed = true;
   }
 
   public double getX() {
@@ -121,6 +121,13 @@ public class Entity {
     return health;
   }
 
+  /**
+   * Outrepasse les déclenchements d'actions liées à la vie
+   */
+  public void setHealth(int amount) {
+    health = amount;
+  }
+
   public void increaseHealth(int amount) {
     if (amount < 0) {
       throw new IllegalArgumentException("Montant négatif : " + amount);
@@ -136,19 +143,12 @@ public class Entity {
       health = 0;
       zeroHealth();
     } else {
-      health = health - amount;
+      health -= amount;
     }
   }
 
   protected void zeroHealth() {
     destroy();
-  }
-
-  /**
-   * Outrepasse les déclenchements d'actions liées à la vie
-   */
-  public void setHealth(int amount) {
-    health = amount;
   }
 
   public boolean isEnemy() {
