@@ -25,7 +25,7 @@ import java.util.regex.Pattern;
 public class Client {
 
   public static final String GAME_NAME = "LightMagique";
-  private static final String DEFAULT_ADDRESS = "138.195.150.124";
+  private static final String DEFAULT_ADDRESS = "192.168.0.11";
   private static final double lookAroundFactor = 0.2;
   private Properties properties;
   private State state;

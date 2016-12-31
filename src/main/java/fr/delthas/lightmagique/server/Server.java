@@ -22,7 +22,7 @@ public class Server {
   private Random random = new Random();
   private State state;
   private boolean stopRequested = false;
-  private int sendCount;
+  private long sendCount;
   private ServerConnection serverConnection;
 
   private ByteBuffer sendBuffer;
@@ -33,6 +33,7 @@ public class Server {
   private int ticksSinceLastWave = 0;
 
   private List<Integer> disconnectedClients = new ArrayList<>();
+  private List<Triplet<Double, Double, Long>> avoidPoints = new ArrayList<>(50);
 
   private Server(Properties properties) {
     this.properties = properties;
@@ -71,7 +72,7 @@ public class Server {
       try {
         Properties.writeDefaultProperties(propertiesPath);
       } catch (IOException e) {
-        System.out.println("Could not write the default properties file to " + propertiesPath.normalize().toString());
+        System.out.println("Could not write the default properties file to " + propertiesPath.normalize());
       }
     }
     try {
@@ -119,7 +120,7 @@ public class Server {
       state.serialize(i, true);
       serverConnection.sendPacket(i);
     }
-    state.setDestroyEnemyListener(this::sendEnemy);
+    state.setDestroyEnemyListener(this::enemyDestroyed);
     state.setDestroyEntityListener(this::sendEntity);
     state.setPlayerKilledEnemyListener(_void -> {
       sendBuffer.clear();
@@ -166,7 +167,7 @@ public class Server {
       if (sleepMillis >= 0) {
         try {
           Thread.sleep(sleepMillis);
-        } catch (InterruptedException e) {
+        } catch (InterruptedException ignore) {
         }
       } else {
         System.err.println("Warning: Running behind clock");
@@ -234,14 +235,53 @@ public class Server {
             player = player2;
           }
         }
-        double angle = Math.atan2(player.getY() - enemy.getY(), player.getX() - enemy.getX());
-        enemy.setAngle(angle);
+        double forceX, forceY;
+        double deltaPlayerX = player.getX() - enemy.getX();
+        double deltaPlayerY = player.getY() - enemy.getY();
+        double deltaPlayerHypot = Math.hypot(deltaPlayerX, deltaPlayerY);
+        forceX = deltaPlayerX / deltaPlayerHypot;
+        forceY = deltaPlayerY / deltaPlayerHypot;
+        for (Triplet<Double, Double, Long> avoidPoint : avoidPoints) {
+          double deltaAvoidX = avoidPoint.getFirst() - enemy.getX();
+          double deltaAvoidY = avoidPoint.getSecond() - enemy.getY();
+          double deltaAvoidHypot = Math.hypot(deltaAvoidX, deltaAvoidY);
+          if (deltaAvoidHypot > 600) {
+            continue;
+          }
+          forceX -= deltaAvoidX / deltaAvoidHypot * 5;
+          forceY -= deltaAvoidY / deltaAvoidHypot * 5;
+        }
+        double newAngle = Math.atan2(forceY, forceX);
+        if (!Double.isNaN(newAngle)) {
+          double currentAngle = enemy.getAngle();
+          double deltaAngle = newAngle - currentAngle;
+          deltaAngle += Math.PI;
+          deltaAngle %= Math.PI * 2;
+          if (deltaAngle < 0) {
+            deltaAngle += Math.PI * 2;
+          }
+          deltaAngle -= Math.PI;
+          if (deltaAngle >= 0) {
+            if (deltaAngle <= Math.PI * 2 / 50) {
+              enemy.setAngle(newAngle);
+            } else {
+              enemy.setAngle(currentAngle + Math.PI * 2 / 50);
+            }
+          } else {
+            if (deltaAngle >= -Math.PI * 2 / 50) {
+              enemy.setAngle(newAngle);
+            } else {
+              enemy.setAngle(currentAngle - Math.PI * 2 / 50);
+            }
+          }
+        }
+        double playerAngle = Math.atan2(player.getY() - enemy.getY(), player.getX() - enemy.getX());
         if (ticksSinceLastWave > 140 && enemy.dash()) {
           sendBuffer.clear();
           sendBuffer.put((byte) 13).putShort((short) i);
           sendToAll();
         }
-        if (player.isFrozen() && min < 50 * 50) {
+        if (player.isFrozen() && min < 100 * 100) {
           enemy.setMoving(false);
         } else {
           enemy.setMoving(true);
@@ -249,7 +289,7 @@ public class Server {
         Triplet<Double, Integer, Integer> ball = enemy.ball();
         if (ball != null) {
           int id = state.getFreeEntityId(false);
-          state.getEntity(id).create(enemy.getX(), enemy.getY(), ball.getFirst(), angle, ball.getThird(), ball.getSecond(), true);
+          state.getEntity(id).create(enemy.getX(), enemy.getY(), ball.getFirst(), playerAngle, ball.getThird(), ball.getSecond(), true);
           sendEntity(id);
           sendBuffer.clear();
           sendBuffer.put((byte) 9).putShort((short) i);
@@ -259,7 +299,7 @@ public class Server {
           ball = enemy.stopCharge();
           if (ball != null) {
             int id = state.getFreeEntityId(false);
-            state.getEntity(id).create(enemy.getX(), enemy.getY(), ball.getFirst(), angle, ball.getThird(), ball.getSecond(), true);
+            state.getEntity(id).create(enemy.getX(), enemy.getY(), ball.getFirst(), playerAngle, ball.getThird(), ball.getSecond(), true);
             sendEntity(id);
             sendBuffer.clear();
             sendBuffer.put((byte) 9).putShort((short) i);
@@ -270,6 +310,7 @@ public class Server {
           enemy.charge();
         }
       }
+      avoidPoints.removeIf(t -> t.getThird() < sendCount - 100);
     }
     ticksSinceLastWave++;
     if (ticksUntilNextWave == 0) {
@@ -362,6 +403,12 @@ public class Server {
     sendBuffer.put((byte) 2);
     state.serialize(id);
     sendToAll();
+  }
+
+  private void enemyDestroyed(int id) throws IOException {
+    Entity entity = state.getEntity(id);
+    avoidPoints.add(new Triplet<>(entity.getX(), entity.getY(), sendCount));
+    sendEnemy(id);
   }
 
   private void sendEnemy(int id) throws IOException {
