@@ -881,7 +881,7 @@ class Window {
   public void closeRequested() {
     glfwWindowShouldClose(window);
   }
-
+  
   public void start(BufferedImage image) {
     int imageWidth = image.getWidth();
     int imageHeight = image.getHeight();
@@ -906,6 +906,8 @@ class Window {
     glVertexAttribPointer(0, 2, GL_FLOAT, false, 0, 0);
     glEnableVertexAttribArray(0);
     glBindVertexArray(vao);
+    
+    glfwSwapBuffers(window);
   }
 
   public void exit() {

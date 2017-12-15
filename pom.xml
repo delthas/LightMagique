@@ -11,6 +11,11 @@
       <artifactId>joml</artifactId>
       <version>1.7.1</version>
     </dependency>
+    <dependency>
+      <groupId>fr.delthas</groupId>
+      <artifactId>network</artifactId>
+      <version>1.0.1</version>
+    </dependency>
     <!-- LWJGL dependencies START -->
     <dependency>
       <groupId>org.lwjgl</groupId>
@@ -37,7 +42,6 @@
       <artifactId>lwjgl-stb</artifactId>
       <version>3.1.0</version>
     </dependency>
-
     <dependency>
       <groupId>org.lwjgl</groupId>
       <artifactId>lwjgl</artifactId>
@@ -168,7 +172,7 @@
           </execution>
           <execution>
             <id>dep-jar</id>
-            <phase>none</phase> <!-- Set to package when updating libraries -->
+            <phase>package</phase> <!-- Set to package when updating libraries -->
             <goals>
               <goal>jar</goal>
             </goals>
@@ -200,7 +204,7 @@
           </execution>
           <execution>
             <id>dependencies</id>
-            <phase>none</phase>  <!-- Set to package when updating libraries -->
+            <phase>package</phase>  <!-- Set to package when updating libraries -->
             <goals>
               <goal>upload-single</goal>
             </goals>

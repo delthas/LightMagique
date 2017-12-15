@@ -233,6 +233,7 @@ public class Server {
           double min2 = State.distanceSq(enemy, player2);
           if (min2 < min) {
             player = player2;
+            min = min2;
           }
         }
         double forceX, forceY;
